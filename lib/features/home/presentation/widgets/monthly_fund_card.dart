@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 
 class MonthlyFundCard extends StatelessWidget {
-  const MonthlyFundCard({super.key});
+  final VoidCallback? onPressed;
+  const MonthlyFundCard({super.key, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -168,9 +169,7 @@ class MonthlyFundCard extends StatelessWidget {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: () {
-                // Có thể thêm hành động ở đây
-              },
+              onPressed: onPressed,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
