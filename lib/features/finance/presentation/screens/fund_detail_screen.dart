@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'add_expense_screen.dart';
 
 class FundDetailScreen extends StatefulWidget {
   const FundDetailScreen({Key? key}) : super(key: key);
@@ -326,21 +327,29 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
 
   // ========================= BUTTON ADD SPENDING ==========================
   Widget _buildAddButton() {
-    return Center(
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFF7DD4E8),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: const Center(
-          child: Text(
-            "Thêm chi tiêu từ quỹ",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddExpenseScreen()),
+        );
+      },
+      child: Center(
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFF7DD4E8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: const Center(
+            child: Text(
+              "Thêm chi tiêu từ quỹ",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
             ),
           ),
         ),
