@@ -3,6 +3,7 @@ import '../widgets/home_header.dart';
 import '../widgets/house_info_card.dart';
 import '../widgets/leaderboard_card.dart';
 import '../widgets/today_progress_card.dart';
+import '../widgets/monthly_fund_card.dart';
 
 class HomeScreen extends StatelessWidget {
   final Function(int) onSwitchTab;
@@ -40,6 +41,9 @@ class HomeScreen extends StatelessWidget {
                 onSwitchTab(1); 
               },
             ),
+
+            // Quỹ chung tháng này
+            const MonthlyFundCard(),
 
             // 4. Các phần khác (Tiến độ)... để sau
             const SizedBox(height: 20),

@@ -4,7 +4,6 @@ import '../../../../core/constants/app_colors.dart';
 class TodayProgressCard extends StatelessWidget {
   final VoidCallback? onPressed;
   const TodayProgressCard({super.key, this.onPressed});
-  
 
   @override
   Widget build(BuildContext context) {
@@ -34,31 +33,31 @@ class TodayProgressCard extends StatelessWidget {
 
           // 2. Danh sách thành viên (Giả lập dữ liệu)
           _buildProgressItem(
-            avatarLabel: "M", 
-            avatarColor: Colors.pink.shade100, 
+            avatarLabel: "M",
+            avatarColor: Colors.pink.shade100,
             textColor: Colors.pink,
-            name: "Minh", 
-            progressText: "5/6 công việc"
-          ),
-          const Divider(height: 25, color: Colors.black12),
-          
-          _buildProgressItem(
-            avatarLabel: "L", 
-            avatarColor: Colors.lightGreen.shade100, 
-            textColor: Colors.green,
-            name: "Long", 
-            progressText: "5/6 công việc"
+            name: "Minh",
+            progressText: "5/6 công việc",
           ),
           const Divider(height: 25, color: Colors.black12),
 
           _buildProgressItem(
-            avatarLabel: "T", 
-            avatarColor: Colors.cyan.shade100, 
-            textColor: Colors.cyan.shade800,
-            name: "Tuân", 
-            progressText: "5/6 công việc"
+            avatarLabel: "L",
+            avatarColor: Colors.lightGreen.shade100,
+            textColor: Colors.green,
+            name: "Long",
+            progressText: "5/6 công việc",
           ),
-          
+          const Divider(height: 25, color: Colors.black12),
+
+          _buildProgressItem(
+            avatarLabel: "T",
+            avatarColor: Colors.cyan.shade100,
+            textColor: Colors.cyan.shade800,
+            name: "Tuân",
+            progressText: "5/6 công việc",
+          ),
+
           const SizedBox(height: 20),
 
           // 3. Nút bấm "Xem chi tiết"
@@ -67,8 +66,8 @@ class TodayProgressCard extends StatelessWidget {
             height: 50,
             child: ElevatedButton(
               // 4. Gọi hàm được truyền vào
-              onPressed: onPressed, 
-              
+              onPressed: onPressed,
+
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -104,24 +103,30 @@ class TodayProgressCard extends StatelessWidget {
           radius: 22,
           child: Text(
             avatarLabel,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Colors.black87,
+            ),
           ),
         ),
         const SizedBox(width: 15),
-        
+
         // Tên
         Text(
           name,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
-        
+
         const Spacer(), // Đẩy phần sau sang phải cùng
-        
         // Trạng thái text
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Text("Đã hoàn thành", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            const Text(
+              "Đã hoàn thành",
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
             Text(
               progressText,
               style: const TextStyle(
@@ -131,7 +136,7 @@ class TodayProgressCard extends StatelessWidget {
               ),
             ),
           ],
-        )
+        ),
       ],
     );
   }
