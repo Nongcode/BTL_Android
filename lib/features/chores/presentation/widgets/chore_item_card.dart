@@ -4,6 +4,7 @@ class ChoreItemCard extends StatelessWidget {
   final String title;
   final String assignee;
   final bool isDone;
+  final String iconAsset;
   final VoidCallback? onTapButton; // Hàm xử lý khi bấm nút
 
   const ChoreItemCard({
@@ -11,6 +12,7 @@ class ChoreItemCard extends StatelessWidget {
     required this.title,
     required this.assignee,
     required this.isDone,
+    required this.iconAsset,
     this.onTapButton,
   });
 
@@ -23,15 +25,16 @@ class ChoreItemCard extends StatelessWidget {
           // Icon minh họa bên trái
           Container(
             padding: const EdgeInsets.all(10),
+            height: 48, // Cố định kích thước khung
+            width: 48,
             decoration: BoxDecoration(
               color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
-            // Đổi icon tùy trạng thái
-            child: Icon(
-              isDone ? Icons.check_circle_outline : Icons.cleaning_services_outlined,
-              color: Colors.black54,
-              size: 24,
+            // Hiển thị ảnh
+            child: Image.asset(
+              iconAsset, 
+              fit: BoxFit.contain,
             ),
           ),
           const SizedBox(width: 15),

@@ -18,12 +18,48 @@ class _ChoreScreenState extends State<ChoreScreen> {
   // 1. DỮ LIỆU ẢO (MOCK DATA)
   // Đổi tên thành allChores để khớp với logic bên dưới
   List<Chore> allChores = [
-    Chore(id: '1', title: 'Quét nhà lau nhà', assignee: 'Minh', isDone: true),
-    Chore(id: '2', title: 'Phơi quần áo', assignee: 'Tuân', isDone: true),
-    Chore(id: '3', title: 'Đi chợ mua thức ăn', assignee: 'Tuân', isDone: false),
-    Chore(id: '4', title: 'Nấu ăn', assignee: 'Long', isDone: false),
-    Chore(id: '5', title: 'Đổ rác', assignee: 'Long', isDone: false),
-    Chore(id: '6', title: 'Giặt quần áo', assignee: 'Minh', isDone: false),
+    Chore(
+      id: '1', 
+      title: 'Quét nhà lau nhà', 
+      assignee: 'Minh', 
+      isDone: true, 
+      iconAsset: 'assets/images/icons/broom.png' // <--- Ảnh cái chổi
+    ),
+    Chore(
+      id: '2', 
+      title: 'Phơi quần áo', 
+      assignee: 'Tuân', 
+      isDone: true,
+      iconAsset: 'assets/images/icons/laundry.png' // <--- Ảnh quần áo
+    ),
+    Chore(
+      id: '3', 
+      title: 'Đi chợ mua thức ăn', 
+      assignee: 'Tuân', 
+      isDone: false,
+      iconAsset: 'assets/images/icons/grocery.png' // <--- Ảnh giỏ hàng
+    ),
+    Chore(
+      id: '4', 
+      title: 'Nấu ăn', 
+      assignee: 'Long', 
+      isDone: false,
+      iconAsset: 'assets/images/icons/cooking.png' // <--- Ảnh nồi niêu
+    ),
+    Chore(
+      id: '5', 
+      title: 'Đổ rác', 
+      assignee: 'Long', 
+      isDone: false,
+      iconAsset: 'assets/images/icons/trash.png' // <--- Ảnh thùng rác
+    ),
+    Chore(
+      id: '6', 
+      title: 'Giặt quần áo', 
+      assignee: 'Minh', 
+      isDone: false,
+      iconAsset: 'assets/images/icons/wash_clothes.png'
+    ),
   ];
 
   // Hàm lọc danh sách dựa trên tab đang chọn
@@ -236,6 +272,7 @@ class _ChoreScreenState extends State<ChoreScreen> {
                             title: chore.title,
                             assignee: chore.assignee,
                             isDone: chore.isDone,
+                            iconAsset: chore.iconAsset,
                             onTapButton: () {
                               _showConfirmDialog(chore); // Truyền object chore vào popup
                             },
