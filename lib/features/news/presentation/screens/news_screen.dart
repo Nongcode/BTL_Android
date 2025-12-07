@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import 'shopping_list_screen.dart';
+import 'add_note_screen.dart';
+
+
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -87,46 +90,40 @@ class _NewsScreenState extends State<NewsScreen> {
                       "Ghi chú được ghim (${_pinnedNotes.length})",
                     ),
                     const SizedBox(height: 8),
-                    ..._pinnedNotes
-                        .map(
-                          (e) => _BulletinCard(
-                            title: e["title"],
-                            description: e["description"],
-                            tag: e["tag"],
-                            tagColor: e["tagColor"],
-                            time: e["time"],
-                          ),
-                        )
-                        .toList(),
+                    ..._pinnedNotes.map(
+                      (e) => _BulletinCard(
+                        title: e["title"],
+                        description: e["description"],
+                        tag: e["tag"],
+                        tagColor: e["tagColor"],
+                        time: e["time"],
+                      ),
+                    ),
                     const SizedBox(height: 20),
                   ],
                   // All notes
                   _buildSectionTitle("Tất cả ghi chú (${_allNotes.length})"),
                   const SizedBox(height: 8),
-                  ..._allNotes
-                      .map(
-                        (e) => _BulletinCard(
-                          title: e["title"],
-                          description: e["description"],
-                          tag: e["tag"],
-                          tagColor: e["tagColor"],
-                          time: e["time"],
-                        ),
-                      )
-                      .toList(),
+                  ..._allNotes.map(
+                    (e) => _BulletinCard(
+                      title: e["title"],
+                      description: e["description"],
+                      tag: e["tag"],
+                      tagColor: e["tagColor"],
+                      time: e["time"],
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   // Shopping
                   _buildSectionTitle("Mua sắm chung"),
                   const SizedBox(height: 8),
-                  ..._shoppingNotes
-                      .map(
-                        (e) => _ShoppingCard(
-                          title: e["title"],
-                          subtitle: e["subtitle"],
-                          icon: e["icon"],
-                        ),
-                      )
-                      .toList(),
+                  ..._shoppingNotes.map(
+                    (e) => _ShoppingCard(
+                      title: e["title"],
+                      subtitle: e["subtitle"],
+                      icon: e["icon"],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -140,7 +137,9 @@ class _NewsScreenState extends State<NewsScreen> {
                 height: 64,
                 child: ElevatedButton(
                   onPressed: () {
-                    // TODO: mở màn hình tạo ghi chú
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AddNoteScreen()),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,

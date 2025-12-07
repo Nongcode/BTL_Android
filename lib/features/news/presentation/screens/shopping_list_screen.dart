@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
-
+import 'add_shopping_item_screen.dart';
 
 class ShoppingListScreen extends StatefulWidget {
   const ShoppingListScreen({super.key});
@@ -12,11 +12,7 @@ class ShoppingListScreen extends StatefulWidget {
 class _ShoppingListScreenState extends State<ShoppingListScreen> {
   int _selectedFilterIndex = 0;
 
-  final List<String> _filters = [
-    "Tất cả",
-    "Cần mua",
-    "Đã mua",
-  ];
+  final List<String> _filters = ["Tất cả", "Cần mua", "Đã mua"];
 
   // Dummy data
   final List<Map<String, dynamic>> _items = [
@@ -103,63 +99,57 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   // HEADER giống hình (back + title + nút thêm)
   Widget _buildHeader(BuildContext context) {
     return Container(
-      height: 120,
+      height: 90,
       width: double.infinity,
       decoration: const BoxDecoration(
         color: Color(0xFF27C5C5),
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
         children: [
-          // hàng trên: back + title + add
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // back
-              IconButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                icon: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                ),
-              ),
-              const Text(
+          // NÚT BACK
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+          ),
+
+          // TITLE Ở GIỮA (căn giữa chuẩn)
+          Expanded(
+            child: Center(
+              child: Text(
                 "Danh sách mua sắm",
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              // nút +
-              InkWell(
-                onTap: () {
-                  // TODO: mở form thêm mới
-                },
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Icon(
-                    Icons.add,
-                    color: AppColors.primary,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-          const Spacer(),
+
+          // NÚT +
+          InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AddShoppingItemScreen(),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Icon(Icons.add, color: AppColors.primary, size: 22),
+            ),
+          ),
         ],
       ),
     );
@@ -179,8 +169,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               setState(() => _selectedFilterIndex = index);
             },
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.primary : Colors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -193,7 +182,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                           color: AppColors.primary.withOpacity(0.35),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
-                        )
+                        ),
                       ]
                     : [],
               ),
@@ -202,8 +191,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                 style: TextStyle(
                   color: isSelected ? Colors.white : Colors.black87,
                   fontSize: 13,
-                  fontWeight:
-                      isSelected ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ),
@@ -260,11 +248,7 @@ class _ShoppingItemCard extends StatelessWidget {
                 color: isDone ? const Color(0xFF2ECC71) : Colors.grey.shade500,
               ),
               child: isDone
-                  ? const Icon(
-                      Icons.check,
-                      size: 16,
-                      color: Colors.white,
-                    )
+                  ? const Icon(Icons.check, size: 16, color: Colors.white)
                   : null,
             ),
           ),
@@ -284,18 +268,12 @@ class _ShoppingItemCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   detail,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black87,
-                  ),
+                  style: const TextStyle(fontSize: 13, color: Colors.black87),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   "Thêm bởi : $addedBy",
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
               ],
             ),
@@ -305,10 +283,7 @@ class _ShoppingItemCard extends StatelessWidget {
             onPressed: () {
               // TODO: menu (sửa, xoá,...)
             },
-            icon: const Icon(
-              Icons.more_vert_rounded,
-              size: 20,
-            ),
+            icon: const Icon(Icons.more_vert_rounded, size: 20),
           ),
         ],
       ),
