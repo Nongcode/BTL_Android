@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/constants/app_colors.dart';
 import 'features/home/presentation/screens/home_screen.dart';
 import 'features/chores/presentation/screens/chore_screen.dart';
-import 'features/news/presentation/screens/news_screen.dart';
+import 'features/bulletin/presentation/screens/news_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
