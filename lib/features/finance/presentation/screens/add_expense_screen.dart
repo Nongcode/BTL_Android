@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'split_detail_screen.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   const AddExpenseScreen({Key? key}) : super(key: key);
@@ -350,7 +351,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             const SizedBox(width: 8),
             _buildSplitButton("Theo tỷ lệ", 1, Icons.pie_chart),
             const SizedBox(width: 8),
-            _buildSplitButton("Theo người\ntham gia", 2, Icons.group),
+            _buildSplitButton("Theo từng người", 2, Icons.group),
           ],
         ),
       ],
@@ -400,20 +401,74 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   // ---------------- BUTTONS -------------------
   Widget _buildMainButton() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF7DD4E8),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Center(
-        child: Text(
-          "Lưu chi tiêu & tiếp tục chia tiền",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
+    // Đổi text theo loại chi tiêu
+    final String buttonText = _selectedType == 0
+        ? "Lưu chi tiêu"
+        : "Lưu chi tiêu & tiếp tục chia tiền";
+
+    return GestureDetector(
+      onTap: () {
+        // ❗ kiểm tra nhập đủ dữ liệu cơ bản
+        if (_title.text.isEmpty ||
+            _amount.text.isEmpty ||
+            _selectedPerson.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Vui lòng nhập đầy đủ tên, số tiền và người trả"),
+            ),
+          );
+          return;
+        }
+
+        // Nếu là "Chi từ quỹ sinh hoạt" -> chỉ lưu (tạm thời show SnackBar)
+        if (_selectedType == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Đã lưu chi tiêu từ quỹ sinh hoạt")),
+          );
+          return;
+        }
+
+        // Nếu là "Chi tiêu phát sinh" -> chuyển sang màn chia tiền chi tiết
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SplitDetailScreen(
+              title: _title.text,
+              amount: int.parse(_amount.text),
+              payer: _selectedPerson,
+              members: [
+                {"name": "Minh", "color": Colors.red},
+                {"name": "Long", "color": Colors.green},
+                {"name": "Tuấn", "color": Colors.blue},
+              ],
+              splitType: _selectedSplit,
+
+              // THÊM CALLBACK BẮT BUỘC
+              onConfirm: (result) {
+                print("Kết quả chia tiền: $result");
+
+                // TODO: Lưu vào database hoặc Provider sau này
+                // Navigator.pop(context); // nếu muốn đóng màn hình sau khi lưu
+              },
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF7DD4E8),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Text(
+            buttonText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),

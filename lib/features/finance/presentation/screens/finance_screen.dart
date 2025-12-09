@@ -45,7 +45,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
                   children: [
                     Expanded(
                       child: FinanceStatCard(
-                        title: "Tổng chi quỹ tháng này",
+                        title: "Tổng chi quỹ",
                         amount: "1.250.000 đ",
                         amountColor: const Color(0xFF68A7E3),
                         icon: Container(
