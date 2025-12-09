@@ -56,7 +56,7 @@ class HomeScreen extends StatelessWidget {
             ),
 
             // 4. Các phần khác (Tiến độ)... để sau
-            const SizedBox(height: 20),
+            const SizedBox(height: 80),
           ],
         ),
       ),

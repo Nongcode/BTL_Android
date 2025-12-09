@@ -163,6 +163,127 @@ class _ChoreScreenState extends State<ChoreScreen> {
     );
   }
 
+  void _showAddChoreDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.grey[50], // Nền hơi xám nhẹ giống thiết kế
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Tiêu đề
+                Row(
+                  children: const [
+                    Icon(Icons.library_add_check_outlined, color: Colors.black54),
+                    SizedBox(width: 10),
+                    Text("Thêm công việc mới", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // 2. Input Tên công việc
+                _buildTextFieldInput(hint: "Nhập tên công việc"),
+                const SizedBox(height: 15),
+
+                // 3. Input Điểm thưởng
+                _buildTextFieldInput(hint: "Nhập điểm thưởng công việc", keyboardType: TextInputType.number),
+                const SizedBox(height: 15),
+
+                // 4. Hai Dropdown trên 1 hàng
+                Row(
+                  children: [
+                    Expanded(child: _buildDropdownInput(hint: "Người nhận phân công")),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildDropdownInput(hint: "Loại công việc")),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // 5. Nút bấm Action
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        ),
+                        child: const Text("Hủy", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Logic thêm mới sẽ viết ở đây sau
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF40C4C6), // Màu xanh Teal chủ đạo
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        ),
+                        child: const Text("Thêm việc mới", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTextFieldInput({required String hint, TextInputType keyboardType = TextInputType.text}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.blueGrey,),
+      ),
+      child: TextField(
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownInput({required String hint}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.blueGrey,),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isExpanded: true,
+          hint: Text(hint, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          items: const [], // Chưa có dữ liệu, để rỗng
+          onChanged: (val) {},
+          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Lấy danh sách đã lọc để hiển thị
@@ -170,6 +291,18 @@ class _ChoreScreenState extends State<ChoreScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
+
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 80.0), // Đẩy lên 90px để tránh thanh Menu
+        child: FloatingActionButton(
+          onPressed: _showAddChoreDialog,
+          backgroundColor: const Color(0xFF40C4C6),
+          elevation: 4,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.add, color: Colors.white, size: 40),
+        ),
+      ),
+
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -281,7 +414,7 @@ class _ChoreScreenState extends State<ChoreScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
               ],
             ),
           ),
