@@ -3,6 +3,7 @@ import 'core/constants/app_colors.dart';
 import 'features/home/presentation/screens/home_screen.dart';
 import 'features/chores/presentation/screens/chore_screen.dart';
 import 'features/finance/presentation/screens/finance_screen.dart';
+import 'features/bulletin/presentation/screens/news_screen.dart';
 
 // Thêm vào navigation hoặc bottom nav bar
 
@@ -30,7 +31,7 @@ class _MainScreenState extends State<MainScreen> {
       HomeScreen(onSwitchTab: (index) => _switchTab(index)),
       const ChoreScreen(), // Index 1
       const FinanceScreen(), // Index 2 - Quỹ chung
-      const Scaffold(body: Center(child: Text("Thông báo"))), // Index 3
+      const NewsScreen() // Index 3
     ];
 
     return Scaffold(
