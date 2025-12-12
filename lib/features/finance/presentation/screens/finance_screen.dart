@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/finance_stat_card.dart';
 import 'fund_detail_screen.dart';
-
+import 'debt_summary_screen.dart';
 
 class FinanceScreen extends StatefulWidget {
   const FinanceScreen({super.key});
@@ -22,7 +22,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, 
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Header
                 const Text(
@@ -436,7 +436,15 @@ class _FinanceScreenState extends State<FinanceScreen> {
                         const SizedBox(height: 20),
                         Center(
                           child: GestureDetector(
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const DebtSummaryScreen(),
+                                ),
+                              );
+                            },
+
                             child: const Text(
                               "Xem chi tiết ai nợ ai",
                               style: TextStyle(
