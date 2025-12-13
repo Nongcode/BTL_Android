@@ -30,7 +30,7 @@ class _NewsScreenState extends State<NewsScreen> {
     {
       "title": "WC rò rỉ nước",
       "description":
-          "Đường ống nước bị vỡ cần sửa chữa gấp. Mọi người tạm dừng sử dụng nước từ hôm nay.",
+          "Đường ống nước bị vỡ ,cần sửa chữa gấp. Mọi người vui lòng tạm dừng sử dụng nước từ hôm nay...",
       "tag": "Khẩn cấp",
       "tagColor": Colors.redAccent,
       "time": "1 tiếng trước",
@@ -47,25 +47,19 @@ class _NewsScreenState extends State<NewsScreen> {
   final List<Map<String, dynamic>> _allNotes = [
     {
       "title": "Chủ nhà đến kiểm tra điện",
-      "description": "Thứ 7 tuần này sáng 9 giờ sáng.",
+      "description": "Thứ 7 tuần này lúc 9 giờ sáng .",
       "tag": "Thông báo",
       "tagColor": Colors.grey,
-      "time": "Hôm qua",
+      "time": "2 tiếng trước",
     },
     {
-      "title": "Lịch thu tiền nhà",
-      "description": "Ngày 5 hàng tháng. Chuyển khoản hoặc đưa tiền mặt.",
+      "title": "Quy định đổ rác",
+      "description": "Đổ rác trước 8h sáng các ngày chẵn..",
       "tag": "Nội quy",
       "tagColor": Colors.blueAccent,
       "time": "2 tuần trước",
     },
-    {
-      "title": "Đổ rác đúng giờ",
-      "description": "Mỗi tối từ 19h – 20h mang rác xuống tầng 1.",
-      "tag": "Nội quy",
-      "tagColor": Colors.blueAccent,
-      "time": "3 tuần trước",
-    },
+
   ];
 
   final List<Map<String, dynamic>> _shoppingNotes = const [
@@ -129,7 +123,7 @@ class _NewsScreenState extends State<NewsScreen> {
                   const SizedBox(height: 24),
 
                   // Quick actions (mua sắm,…)
-                  _buildSectionTitle("Tiện ích"),
+                  _buildSectionTitle("Mua sắm chung"),
                   const SizedBox(height: 8),
                   ..._shoppingNotes.map(
                     (e) => ShoppingCard(
@@ -162,7 +156,7 @@ class _NewsScreenState extends State<NewsScreen> {
                     padding: EdgeInsets.zero,
                     elevation: 6,
                   ),
-                  child: const Icon(Icons.add, size: 36, color: Colors.white),
+                  child: const Icon(Icons.add, size: 30, color: Colors.white),
                 ),
               ),
             ),
@@ -213,18 +207,11 @@ class _NewsScreenState extends State<NewsScreen> {
                   color: Colors.white,
                 ),
               ),
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(
-                  Icons.more_vert_rounded,
-                  color: Colors.white,
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 16),
           const Text(
-            "Bảng tin phòng trọ",
+            "Bảng tin chung",
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
