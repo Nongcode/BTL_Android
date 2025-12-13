@@ -6,7 +6,6 @@ class ChoreStatCard extends StatelessWidget {
   final Color iconColor;
   final Color titleColor;
   final bool isSelected;
-  final String iconAsset;
   final Color? backgroundColor;
   
   // 1. Thêm biến này để nhận hàm xử lý click
@@ -18,7 +17,6 @@ class ChoreStatCard extends StatelessWidget {
     required this.count,
     required this.iconColor,
     this.backgroundColor,
-    this.iconAsset = '',  
     
     // 2. Bắt buộc phải truyền hàm này vào khi gọi Widget
     required this.onTap, 
@@ -45,7 +43,7 @@ class ChoreStatCard extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.cyan.withOpacity(0.2),
+                    color: Colors.cyan.withAlpha((0.2 * 255).round()),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   )

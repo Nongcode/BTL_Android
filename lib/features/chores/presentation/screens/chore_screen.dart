@@ -3,6 +3,7 @@ import '../../data/models/chore_model.dart';
 import '../widgets/chore_stat_card.dart';
 import '../widgets/chore_item_card.dart';
 import '../widgets/score_card.dart';
+import 'chore_detail_screen.dart';
 
 class ChoreScreen extends StatefulWidget {
   const ChoreScreen({super.key});
@@ -194,6 +195,12 @@ class _ChoreScreenState extends State<ChoreScreen> {
                 _buildTextFieldInput(hint: "Nhập điểm thưởng công việc", keyboardType: TextInputType.number),
                 const SizedBox(height: 15),
 
+                _buildTextFieldInput(hint: "Nhập hạn hoàn thành công việc"),
+                const SizedBox(height: 15),
+
+                _buildTextFieldInput(hint: "Nhập ghi chú"),
+                const SizedBox(height: 15),
+
                 // 4. Hai Dropdown trên 1 hàng
                 Row(
                   children: [
@@ -377,7 +384,7 @@ class _ChoreScreenState extends State<ChoreScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))
+                      BoxShadow(color: Colors.black.withAlpha((0.05 * 255).round()), blurRadius: 10, offset: const Offset(0, 5))
                     ],
                   ),
                   child: Column(
@@ -409,8 +416,43 @@ class _ChoreScreenState extends State<ChoreScreen> {
                             onTapButton: () {
                               _showConfirmDialog(chore); // Truyền object chore vào popup
                             },
+
+                            onTapCard: () async {
+                              // 1. Dùng await để đợi kết quả
+                              final result = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ChoreDetailScreen(chore: chore),
+                                ),
+                              );
+
+                              // 2. Kiểm tra kết quả trả về
+                              if (result != null) {
+                                if (result is Chore) {
+                                  // Trường hợp CẬP NHẬT: result là một object Chore mới
+                                  setState(() {
+                                    // Tìm vị trí của công việc cũ trong list
+                                    final index = allChores.indexWhere((c) => c.id == result.id);
+                                    if (index != -1) {
+                                      // Thay thế bằng công việc mới (đã sửa tên, người làm...)
+                                      allChores[index] = result;
+                                    }
+                                  });
+                                } else if (result == "DELETE") {
+                                  // Trường hợp XÓA: result là chuỗi "DELETE"
+                                  setState(() {
+                                    allChores.removeWhere((c) => c.id == chore.id);
+                                  });
+                                  
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Đã xóa công việc!')),
+                                  );
+                                }
+                              }
+                            },
+                            
                           );
-                        }).toList(),
+                        }),
                     ],
                   ),
                 ),
