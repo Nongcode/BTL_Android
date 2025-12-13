@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import '../widgets/finance_stat_card.dart';
 import 'fund_detail_screen.dart';
 import 'debt_summary_screen.dart';
+import 'add_expense_screen.dart';
+import 'confirm_payment_screen.dart';
 
 class FinanceScreen extends StatefulWidget {
   const FinanceScreen({super.key});
+
+  static String contributionAmount = "500.000 đ/người/tháng";
 
   @override
   State<FinanceScreen> createState() => _FinanceScreenState();
@@ -12,6 +16,50 @@ class FinanceScreen extends StatefulWidget {
 
 class _FinanceScreenState extends State<FinanceScreen> {
   int _expenseTabIndex = 0; // 0 = Chi tiêu, 1 = Doanh thu
+  late String _contributionAmount;
+
+  @override
+  void initState() {
+    super.initState();
+    _contributionAmount = FinanceScreen.contributionAmount;
+  }
+
+  void _editContributionAmount() {
+    TextEditingController controller = TextEditingController(
+      text: _contributionAmount,
+    );
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Chỉnh sửa mức đóng quỹ sinh hoạt"),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              hintText: "Nhập mức đóng (vd: 500.000 đ/người/tháng)",
+            ),
+            keyboardType: TextInputType.text,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Hủy"),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _contributionAmount = controller.text;
+                  FinanceScreen.contributionAmount = controller.text;
+                });
+                Navigator.of(context).pop();
+              },
+              child: const Text("Lưu"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,16 +191,9 @@ class _FinanceScreenState extends State<FinanceScreen> {
                             ),
                           ),
                           GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const FundDetailScreen(),
-                                ),
-                              );
-                            },
+                            onTap: _editContributionAmount,
                             child: const Text(
-                              "Xem chi tiêu quỹ",
+                              "Chỉnh sửa mức đóng",
                               style: TextStyle(
                                 color: Color(0xFF5DBDD4),
                                 fontWeight: FontWeight.bold,
@@ -165,7 +206,42 @@ class _FinanceScreenState extends State<FinanceScreen> {
                       const SizedBox(height: 16),
 
                       // Mục đông
-                      _buildQuotaRow("Mức đóng:", "500.000 đ/người/tháng"),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            "Mức đóng:",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                _contributionAmount,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                              ),
+
+                              // IconButton(
+                              //   onPressed: _editContributionAmount,
+                              //   icon: const Icon(
+                              //     Icons.edit,
+                              //     size: 16,
+                              //     color: Color(0xFF5DBDD4),
+                              //   ),
+                              //   padding: EdgeInsets.zero,
+                              //   constraints: const BoxConstraints(),
+                              // ),
+                            ],
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
 
                       // Đổ đông (members)
@@ -231,7 +307,14 @@ class _FinanceScreenState extends State<FinanceScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const FundDetailScreen(),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF5DBDD4),
                             foregroundColor: Colors.white,
@@ -280,7 +363,13 @@ class _FinanceScreenState extends State<FinanceScreen> {
                           ),
                           GestureDetector(
                             onTap: () {
-                              // Handle add new expense
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const AddExpenseScreen(initialType: 1),
+                                ),
+                              );
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -639,18 +728,40 @@ class _FinanceScreenState extends State<FinanceScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF5DBDD4),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Text(
-              "Xác nhận thành toán",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 10,
-                color: Colors.white,
+          GestureDetector(
+            onTap: () {
+              // Parse name: "Tuấn đang nợ Long" -> from: "Tuấn", to: "Long"
+              final parts = name.split(" đang nợ ");
+              final from = parts[0];
+              final to = parts[1];
+              // Parse amount: "100.000 đ" -> 100000
+              final intAmount = int.parse(
+                amount.replaceAll(RegExp(r'[^0-9]'), ""),
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ConfirmPaymentScreen(
+                    from: from,
+                    to: to,
+                    amount: intAmount,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF5DBDD4),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                "Xác nhận thành toán",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),

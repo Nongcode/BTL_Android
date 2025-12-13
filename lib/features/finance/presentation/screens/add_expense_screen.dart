@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'split_detail_screen.dart';
 
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({Key? key}) : super(key: key);
+  final int initialType; // 0 = Chi từ quỹ, 1 = Chi phát sinh
+
+  const AddExpenseScreen({Key? key, this.initialType = 0}) : super(key: key);
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
 }
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
-  int _selectedType = 0; // 0 = Chi từ quỹ, 1 = Chi phát sinh
+  late int _selectedType; // 0 = Chi từ quỹ, 1 = Chi phát sinh
   int _selectedSplit = 0; // 0=đều, 1=tỷ lệ, 2=tham gia
 
   DateTime _selectedDate = DateTime.now();
@@ -19,6 +21,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final List<String> _people = ["Minh", "Long", "Tuấn"];
 
   String _selectedPerson = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = widget.initialType;
+  }
 
   @override
   Widget build(BuildContext context) {
