@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'add_expense_screen.dart';
+import 'finance_screen.dart';
 
 class FundDetailScreen extends StatefulWidget {
   const FundDetailScreen({Key? key}) : super(key: key);
@@ -158,7 +159,13 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _infoRow("Mức đóng:", "500.000 đ/người"),
+          _infoRow(
+            "Mức đóng:",
+            FinanceScreen.contributionAmount.replaceAll(
+              '/người/tháng',
+              '/người',
+            ),
+          ),
           const SizedBox(height: 4),
           _infoRow("Số thành viên:", "3"),
           const Divider(height: 24),
