@@ -26,7 +26,7 @@ class ScoreCard extends StatelessWidget {
               const Icon(Icons.bar_chart_rounded, color: Colors.grey, size: 20),
               const SizedBox(width: 8),
               const Text(
-                "Điểm tích lũy tháng của bạn",
+                "Điểm tích lũy",
                 style: TextStyle(
                   fontWeight: FontWeight.bold, 
                   fontSize: 15, 
