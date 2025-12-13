@@ -91,7 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               // Email field
               const Text(
-                'Email',
+                'Số điện thoại',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -104,7 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: 'Nhập số điện thoại của bạn',
-                  prefixIcon: const Icon(Icons.email, color: Color(0xFF5DBDD4)),
+                  prefixIcon: const Icon(Icons.phone, color: Color(0xFF5DBDD4)),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Colors.grey),
