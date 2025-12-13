@@ -101,32 +101,49 @@ class BulletinDetailScreen extends StatelessWidget {
     );
   }
 
-  // HEADER trên cùng: back + actions
-  Widget _buildHeader(BuildContext context) {
-    return Row(
+  // HEADER trên cùng: back 
+ Widget _buildHeader(BuildContext context) {
+  return Container(
+    height: 80,
+    width: double.infinity,
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF27C5C5), Color(0xFF15B2E0)],
+      ),
+      borderRadius: BorderRadius.vertical(
+        bottom: Radius.circular(20),
+      ),
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    child: Stack(
+      alignment: Alignment.center,
       children: [
-        IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.arrow_back_rounded),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: Colors.white,
+            ),
+          ),
         ),
-        const SizedBox(width: 4),
         const Text(
-          "Chi tiết ghi chú",
+          "Chi tiết",
           style: TextStyle(
+            color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w700,
           ),
         ),
-        const Spacer(),
-        IconButton(
-          onPressed: () {
-            // TODO: mở màn sửa ghi chú
-          },
-          icon: const Icon(Icons.edit_outlined),
-        ),
       ],
-    );
-  }
+    ),
+  );
+}
+
+
 
   // INFO trên cùng
   Widget _buildInfoSection() {

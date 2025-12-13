@@ -92,7 +92,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
   // ----- HEADER -----
   Widget _buildHeader(BuildContext context) {
     return Container(
-      height: 90,
+      height: 80,
       width: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -178,7 +178,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
               const Icon(Icons.file_upload_outlined, size: 20),
               const SizedBox(height: 4),
               Text(
-                "Chọn ảnh từ thư viện",
+                "Tải lên hình ảnh ",
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey.shade700,

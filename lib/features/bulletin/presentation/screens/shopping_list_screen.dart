@@ -59,6 +59,20 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AddShoppingItemScreen()),
+          );
+        },
+        backgroundColor: AppColors.primary,
+        shape: const CircleBorder(),
+        elevation: 6,
+        child: const Icon(Icons.add, size: 30, color: Colors.white),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
       body: SafeArea(
         child: Column(
           children: [
@@ -71,7 +85,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
                 itemCount: filteredItems.length,
                 itemBuilder: (context, index) {
                   final item = filteredItems[index];
@@ -123,27 +137,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
               ),
             ),
           ),
-          InkWell(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AddShoppingItemScreen(),
-                ),
-              );
-            },
-            borderRadius: BorderRadius.circular(999),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.add,
-                color: Colors.white,
-              ),
-            ),
-          ),
+          const SizedBox(width: 48),
         ],
       ),
     );
@@ -157,27 +151,22 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
         final bool isSelected = index == _selectedFilterIndex;
 
         return Padding(
-          padding: EdgeInsets.only(
-            right: index == _filters.length - 1 ? 0 : 8,
-          ),
+          padding: EdgeInsets.only(right: index == _filters.length - 1 ? 0 : 8),
           child: GestureDetector(
             onTap: () {
               setState(() => _selectedFilterIndex = index);
             },
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color:
-                    isSelected ? AppColors.primary : Colors.grey.shade200,
+                color: isSelected ? AppColors.primary : Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 _filters[index],
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight:
-                      isSelected ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   color: isSelected ? Colors.white : Colors.black87,
                 ),
               ),
@@ -256,10 +245,7 @@ class _ShoppingItemCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   "Thêm bởi $addedBy",
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                 ),
               ],
             ),
