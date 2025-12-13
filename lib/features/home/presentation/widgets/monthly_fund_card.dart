@@ -55,7 +55,7 @@ class MonthlyFundCard extends StatelessWidget {
             child: ElevatedButton(
               onPressed: onPressed,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7DD4E8),
+                backgroundColor: const Color(0xFF50C2C9),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -137,7 +137,7 @@ class MonthlyFundCard extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00AA55),
+                  color: const Color.fromARGB(255, 134, 205, 169),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
