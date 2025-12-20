@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../../core/constants/app_colors.dart';
+import 'package:intl/intl.dart';
 import '../../data/models/chore_model.dart';
 
-// 1. Chuyển thành StatefulWidget để quản lý việc nhập liệu
 class ChoreDetailScreen extends StatefulWidget {
-  final Chore chore; 
+  final Chore chore;
 
   const ChoreDetailScreen({super.key, required this.chore});
 
@@ -13,43 +12,62 @@ class ChoreDetailScreen extends StatefulWidget {
 }
 
 class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
-  // 2. Khởi tạo các Controller để quản lý text input
+  // Controller
   late TextEditingController _titleController;
   late TextEditingController _assigneeController;
   late TextEditingController _pointsController;
   late TextEditingController _noteController;
+  late TextEditingController _dateController;
 
   @override
   void initState() {
     super.initState();
-    // Gán giá trị ban đầu từ dữ liệu được truyền vào
+    // Gán dữ liệu
     _titleController = TextEditingController(text: widget.chore.title);
-    _assigneeController = TextEditingController(text: widget.chore.assignee);
-    _pointsController = TextEditingController(text: "2 điểm"); // Giả định điểm là 2
-    _noteController = TextEditingController(text: "Không có ghi chú thêm");
+    _assigneeController = TextEditingController(text: widget.chore.assigneeName);
+    _pointsController = TextEditingController(text: widget.chore.points.toString());
+    
+    // Ghi chú (Nếu Backend trả về null thì để chuỗi rỗng)
+    _noteController = TextEditingController(text: widget.chore.description ?? "");
+
+    String formattedDate = widget.chore.dueDate != null
+        ? DateFormat('dd/MM/yyyy').format(widget.chore.dueDate!)
+        : "Không có hạn";
+    _dateController = TextEditingController(text: formattedDate);
   }
 
   @override
   void dispose() {
-    // Giải phóng bộ nhớ khi thoát màn hình
     _titleController.dispose();
     _assigneeController.dispose();
     _pointsController.dispose();
     _noteController.dispose();
+    _dateController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Lấy màu sắc dựa trên trạng thái (dùng widget.chore vì status không sửa ở đây)
     final statusColor = widget.chore.isDone ? Colors.green : Colors.orange;
     final statusText = widget.chore.isDone ? "Đã hoàn thành" : "Chưa hoàn thành";
     final statusIcon = widget.chore.isDone ? Icons.check_circle : Icons.pending;
 
+    const primaryColor = Color(0xFF40C4C6);
+    const backgroundColor = Color(0xFFF5F5F5);
+
+    // Logic xác định loại công việc để hiển thị
+    String jobType = widget.chore.isRotating 
+        ? "Việc chung (Xoay vòng)" 
+        : "Việc cá nhân (Cố định)";
+    
+    // Icon tương ứng cho sinh động
+    IconData jobTypeIcon = widget.chore.isRotating 
+        ? Icons.sync 
+        : Icons.person_pin;
+
     return Scaffold(
       backgroundColor: Colors.white,
-      // Khi bàn phím hiện lên, giao diện sẽ cuộn lên tránh bị che
-      resizeToAvoidBottomInset: true, 
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -57,8 +75,8 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("Chi tiết & Chỉnh sửa", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        centerTitle: false,
+        title: const Text("Chi tiết công việc & Chỉnh sửa", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        centerTitle: true,
       ),
       body: SafeArea(
         child: Column(
@@ -74,28 +92,25 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                       height: 100,
                       width: 100,
                       padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
+                      decoration: const BoxDecoration(
+                        color: backgroundColor,
                         shape: BoxShape.circle,
                       ),
                       child: Image.asset(widget.chore.iconAsset, fit: BoxFit.contain),
                     ),
                     const SizedBox(height: 20),
 
-                    // --- Input Tên công việc (To & Đậm) ---
+                    // --- Tên công việc ---
                     TextField(
                       controller: _titleController,
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none, // Bỏ viền để nhìn tự nhiên như Text thường
-                        hintText: "Nhập tên công việc",
-                      ),
+                      decoration: const InputDecoration(border: InputBorder.none, hintText: "Tên công việc"),
                     ),
-                    
+
                     const SizedBox(height: 10),
 
-                    // --- Badge Trạng thái (Không cho sửa ở đây) ---
+                    // --- Trạng thái ---
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
@@ -113,22 +128,29 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                     ),
                     const SizedBox(height: 30),
 
-                    // --- Form nhập liệu chi tiết ---
+                    // --- Form chi tiết ---
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: AppColors.background,
+                        color: backgroundColor,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Column(
                         children: [
                           _buildEditableRow(Icons.person, "Người thực hiện", _assigneeController),
                           const Divider(height: 30),
+
+                          // Dùng ReadOnly vì loại việc thường do hệ thống định nghĩa, không sửa tay ở đây
+                          _buildReadOnlyRow(jobTypeIcon, "Loại công việc", jobType, textColor: Colors.blue[700]),
+                          const Divider(height: 30),
+
                           _buildEditableRow(Icons.stars_rounded, "Điểm thưởng", _pointsController, isNumber: true, valueColor: Colors.red),
                           const Divider(height: 30),
-                          // Ngày tháng tạm thời để tĩnh hoặc dùng DatePicker sau này
-                          _buildEditableRow(Icons.calendar_today, "Hạn hoàn thành", TextEditingController(text: "25/12/2025")), 
+                          
+                          _buildEditableRow(Icons.calendar_today, "Hạn hoàn thành", _dateController),
                           const Divider(height: 30),
+                          
+                          // Ghi chú (Description)
                           _buildEditableRow(Icons.notes, "Ghi chú", _noteController),
                         ],
                       ),
@@ -138,7 +160,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
               ),
             ),
 
-            // --- Khu vực nút bấm ---
+            // --- Nút bấm ---
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -149,7 +171,6 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
               ),
               child: Row(
                 children: [
-                  // Nút Xóa
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () => _showDeleteConfirmDialog(context),
@@ -169,33 +190,31 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                     ),
                   ),
                   const SizedBox(width: 15),
-                  
-                  // Nút Cập nhật
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        // 3. Logic Cập nhật: Tạo object mới từ dữ liệu trong Controller
+                        // Logic update
                         final updatedChore = Chore(
                           id: widget.chore.id,
-                          title: _titleController.text, // Lấy tên mới
-                          assignee: _assigneeController.text, // Lấy người làm mới
-                          isDone: widget.chore.isDone, // Giữ nguyên trạng thái
-                          iconAsset: widget.chore.iconAsset, // Giữ nguyên icon
+                          title: _titleController.text,
+                          assigneeName: _assigneeController.text,
+                          points: int.tryParse(_pointsController.text) ?? 0,
+                          description: _noteController.text, // Lấy giá trị mới từ ô nhập
+                          
+                          // Giữ nguyên
+                          isDone: widget.chore.isDone,
+                          iconAsset: widget.chore.iconAsset,
+                          iconType: widget.chore.iconType,
+                          dueDate: widget.chore.dueDate,
+                          isRotating: widget.chore.isRotating, // Giữ nguyên loại việc
                         );
-
-                        // 4. Trả dữ liệu về màn hình trước
                         Navigator.pop(context, updatedChore);
-                        
-                        // Hiển thị thông báo nhỏ
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Đã cập nhật thông tin công việc!'), backgroundColor: Colors.green),
-                        );
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu thay đổi!'), backgroundColor: Colors.green));
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: primaryColor,
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                        elevation: 0,
                       ),
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -216,7 +235,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     );
   }
 
-  // Widget hiển thị dòng có thể chỉnh sửa (TextField)
+  // Widget nhập liệu (Có thể sửa)
   Widget _buildEditableRow(IconData icon, String label, TextEditingController controller, {bool isNumber = false, Color valueColor = Colors.black87}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -225,32 +244,25 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
         const SizedBox(width: 15),
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 15)),
         const SizedBox(width: 10),
-        
-        // Dùng Expanded chứa TextField để nhập liệu
         Expanded(
           child: TextField(
             controller: controller,
             textAlign: TextAlign.end,
             keyboardType: isNumber ? TextInputType.number : TextInputType.text,
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: valueColor),
-            decoration: const InputDecoration(
-              isDense: true, // Thu gọn chiều cao
-              contentPadding: EdgeInsets.zero,
-              border: InputBorder.none, // Không hiện viền ô nhập
-              hintText: "Nhập...",
-            ),
+            decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.zero, border: InputBorder.none, hintText: "Nhập..."),
           ),
         ),
-        // Thêm icon bút chì nhỏ để người dùng biết là sửa được
         const SizedBox(width: 5),
-        const Icon(Icons.edit, size: 14, color: Colors.grey), 
+        const Icon(Icons.edit, size: 14, color: Colors.grey),
       ],
     );
   }
 
-  // Widget hiển thị dòng tĩnh (không sửa được, ví dụ Ngày tháng)
-  Widget _buildStaticRow(IconData icon, String label, String value) {
+  // [MỚI] Widget hiển thị thông tin tĩnh (Không cho sửa)
+  Widget _buildReadOnlyRow(IconData icon, String label, String value, {Color? textColor}) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Icon(icon, color: Colors.grey, size: 22),
         const SizedBox(width: 15),
@@ -260,10 +272,10 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
           child: Text(
             value,
             textAlign: TextAlign.end,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
-            overflow: TextOverflow.visible,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor ?? Colors.black87),
           ),
         ),
+        // Không có icon Edit vì đây là ReadOnly
       ],
     );
   }
@@ -274,13 +286,12 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
       builder: (context) => AlertDialog(
         title: const Text("Xác nhận xóa"),
         content: Text("Bạn có chắc chắn muốn xóa công việc '${widget.chore.title}' không?"),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Tắt popup
-              Navigator.pop(context, "DELETE"); // Trả về tín hiệu xóa
+              Navigator.pop(context);
+              Navigator.pop(context, "DELETE");
             },
             child: const Text("Xóa", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
