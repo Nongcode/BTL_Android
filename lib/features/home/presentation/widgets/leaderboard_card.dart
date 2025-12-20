@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:btl_android_flutter/features/chores/presentation/screens/score_detail_screen.dart';
 import '../screens/leaderboard_detail_screen.dart';
 
 class LeaderboardCard extends StatelessWidget {
