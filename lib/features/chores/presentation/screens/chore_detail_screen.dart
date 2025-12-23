@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/chore_model.dart';
+import '../../data/service/chore_service.dart';
 
 class ChoreDetailScreen extends StatefulWidget {
   final Chore chore;
@@ -12,6 +13,9 @@ class ChoreDetailScreen extends StatefulWidget {
 }
 
 class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
+
+  final ChoreService _choreService = ChoreService();
+  bool _isLoading = false;
   // Controller
   late TextEditingController _titleController;
   late TextEditingController _assigneeController;
@@ -34,6 +38,94 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
         ? DateFormat('dd/MM/yyyy').format(widget.chore.dueDate!)
         : "Không có hạn";
     _dateController = TextEditingController(text: formattedDate);
+  }
+
+  Future<void> _handleUpdate() async {
+    setState(() => _isLoading = true); // Bật loading
+
+    // Tạo object mới từ dữ liệu nhập
+    final updatedChore = Chore(
+      id: widget.chore.id,
+      title: _titleController.text,
+      assigneeName: _assigneeController.text,
+      points: int.tryParse(_pointsController.text) ?? 0,
+      description: _noteController.text,
+      
+      // Giữ nguyên các trường cũ
+      assigneeId: widget.chore.assigneeId, 
+      templateId: widget.chore.templateId,
+      isDone: widget.chore.isDone,
+      iconAsset: widget.chore.iconAsset,
+      iconType: widget.chore.iconType,
+      dueDate: widget.chore.dueDate,
+      isRotating: widget.chore.isRotating,
+      frequency: widget.chore.frequency,
+      rotationOrder: widget.chore.rotationOrder,
+    );
+
+    final templateIdToUpdate = widget.chore.templateId;
+    // Gọi API
+    final success = await _choreService.updateTemplate(templateIdToUpdate.toString(), updatedChore);
+
+    setState(() => _isLoading = false); // Tắt loading
+
+    if (success) {
+      if (mounted) {
+        // Trả về true để màn hình danh sách biết mà reload
+        Navigator.pop(context, true); 
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cập nhật thành công!'), backgroundColor: Colors.green),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lỗi cập nhật!'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // --- HÀM XỬ LÝ DELETE ---
+  Future<void> _handleDelete() async {
+  // 1. Đóng cái Dialog xác nhận trước
+    Navigator.pop(context); 
+
+    setState(() => _isLoading = true);
+
+    // --- SỬA Ở ĐÂY: Lấy đúng Template ID ---
+    // Giống như lúc Update, ta phải lấy templateId
+    final templateIdToDelete = widget.chore.templateId;
+
+    // Kiểm tra null cho chắc chắn
+    if (templateIdToDelete == null) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lỗi: Không tìm thấy ID mẫu công việc!'), backgroundColor: Colors.red),
+        );
+        return;
+    }
+
+    // Gọi API (nhớ ép kiểu .toString() nếu Service yêu cầu String giống hàm update)
+    final success = await _choreService.deleteTemplate(templateIdToDelete.toString()); // Hoặc templateIdToDelete nếu service nhận int
+
+    setState(() => _isLoading = false);
+
+    if (success) {
+      if (mounted) {
+        // Trả về true để màn hình danh sách biết mà reload
+        Navigator.pop(context, true); 
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã xóa công việc!'), backgroundColor: Colors.green),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lỗi xóa công việc!'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -63,7 +155,13 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     // Icon tương ứng cho sinh động
     IconData jobTypeIcon = widget.chore.isRotating 
         ? Icons.sync 
-        : Icons.person_pin;
+        : Icons.person_pin;    
+    if (_isLoading) {
+        return const Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(child: CircularProgressIndicator(color: Color(0xFF40C4C6))),
+        );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -192,25 +290,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                   const SizedBox(width: 15),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        // Logic update
-                        final updatedChore = Chore(
-                          id: widget.chore.id,
-                          title: _titleController.text,
-                          assigneeName: _assigneeController.text,
-                          points: int.tryParse(_pointsController.text) ?? 0,
-                          description: _noteController.text, // Lấy giá trị mới từ ô nhập
-                          
-                          // Giữ nguyên
-                          isDone: widget.chore.isDone,
-                          iconAsset: widget.chore.iconAsset,
-                          iconType: widget.chore.iconType,
-                          dueDate: widget.chore.dueDate,
-                          isRotating: widget.chore.isRotating, // Giữ nguyên loại việc
-                        );
-                        Navigator.pop(context, updatedChore);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu thay đổi!'), backgroundColor: Colors.green));
-                      },
+                      onPressed: _handleUpdate,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         padding: const EdgeInsets.symmetric(vertical: 15),
@@ -280,6 +360,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     );
   }
 
+  // Tìm đến hàm _showDeleteConfirmDialog ở cuối file
   void _showDeleteConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -288,10 +369,12 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
         content: Text("Bạn có chắc chắn muốn xóa công việc '${widget.chore.title}' không?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
+          
+          // --- SỬA Ở ĐÂY ---
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context, "DELETE");
+              // Thay vì pop context lung tung, hãy gọi thẳng hàm xử lý logic
+              _handleDelete(); 
             },
             child: const Text("Xóa", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),

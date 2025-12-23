@@ -1,10 +1,11 @@
 class Chore {
   final String id;
+  final int? templateId;
   final String title;
-  final String? description; // <--- Trường mới bị thiếu
+  final String? description;
   
-  final String assigneeName; // <--- Trường mới (Thay cho 'assignee' cũ)
-  final int? assigneeId;     // <--- Trường mới
+  final String assigneeName;
+  final int? assigneeId;
 
   bool isDone;
   final String status;       
@@ -12,8 +13,8 @@ class Chore {
   final String iconAsset;    
 
   final int points;          
-  final int bonusPoints;     // <--- Trường mới
-  final int penaltyPoints;   // <--- Trường mới
+  final int bonusPoints;     
+  final int penaltyPoints;  
   
   final bool isRotating;     
   final List<int> rotationOrder; 
@@ -23,9 +24,10 @@ class Chore {
 
   Chore({
     required this.id,
+    this.templateId,
     required this.title,
     this.description,
-    required this.assigneeName, // Đổi tên tham số từ assignee thành assigneeName
+    required this.assigneeName,
     this.assigneeId,
     required this.isDone,
     this.status = 'PENDING',
@@ -53,15 +55,16 @@ class Chore {
         case 'cooking': return 'assets/images/icons/cooking.png';
         case 'trash': return 'assets/images/icons/trash.png';
         case 'laundry': return 'assets/images/icons/laundry.png';
-        case 'grocery': return 'assets/images/icons/grocery.png';
-        case 'water': return 'assets/images/icons/water.png';
         case 'card': return 'assets/images/icons/card.png';
+        case 'water': return 'assets/images/icons/water.png';
+        case 'wc': return 'assets/images/icons/wc.png';
         default: return 'assets/images/icons/broom.png';
       }
     }
 
     return Chore(
       id: json['id'].toString(),
+      templateId: json['chore_template_id'] ?? json['template_id'],
       title: json['title'] ?? 'Công việc',
       description: json['description'], // Map description
       
@@ -97,6 +100,7 @@ class Chore {
   // --- 2. TO JSON (Flutter -> Server) ---
   Map<String, dynamic> toJson() {
     return {
+      'chore_template_id': templateId,
       "title": title,
       "description": description,
       "base_points": points,

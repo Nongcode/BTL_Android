@@ -26,21 +26,21 @@ class _ChoreScreenState extends State<ChoreScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchData(); // Gọi API ngay khi mở màn hình
+    _fetchTodayChores();
   }
 
   // --- HÀM GỌI API LẤY DANH SÁCH ---
-  Future<void> _fetchData() async {
-    setState(() => _isLoading = true);
+  Future<void> _fetchTodayChores() async {
+    setState(() => _isLoading = true); // Hiện loading
     try {
-      final chores = await _choreService.getTodayChores();
+      final chores = await _choreService.getTodayChores(); // Gọi Service lấy việc hôm nay
       setState(() {
         allChores = chores;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
       print("Lỗi tải dữ liệu: $e");
+      setState(() => _isLoading = false);
     }
   }
 
@@ -126,7 +126,7 @@ class _ChoreScreenState extends State<ChoreScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Thành công! Điểm đã được cộng.'), backgroundColor: Colors.green),
                           );
-                          _fetchData(); // Tải lại danh sách để cập nhật giao diện
+                          _fetchTodayChores(); // Tải lại danh sách để cập nhật giao diện
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Lỗi kết nối Server!'), backgroundColor: Colors.red),
@@ -161,7 +161,7 @@ class _ChoreScreenState extends State<ChoreScreen> {
     // Nếu có dữ liệu trả về từ màn hình Add
     if (result != null && result is Chore) {
       // Gọi API tạo mới
-      final success = await _choreService.createChoreTemplate(result);
+      final success = await _choreService.createTemplate(result);
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -172,7 +172,7 @@ class _ChoreScreenState extends State<ChoreScreen> {
         );
         // Lưu ý: Việc mới tạo là Template, có thể chưa hiện ngay ở danh sách Today
         // trừ khi Backend có logic tự sinh việc. Ta cứ load lại cho chắc.
-        _fetchData(); 
+        _fetchTodayChores(); 
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Tạo thất bại!'), backgroundColor: Colors.red),
@@ -192,9 +192,40 @@ class _ChoreScreenState extends State<ChoreScreen> {
       backgroundColor: const Color(0xFFF5F5F5),
 
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 80.0),
+        padding: const EdgeInsets.only(bottom: 80.0), // Padding này để tránh bị che bởi BottomBar (nếu có)
         child: FloatingActionButton(
-          onPressed: _navigateToAddScreen,
+          onPressed: () async {
+            // 1. Chờ kết quả từ màn hình thêm mới
+            final newChore = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AddChoreScreen()),
+            );
+
+            // 2. Kiểm tra kết quả trả về
+            if (newChore != null) {
+              // --- BƯỚC QUAN TRỌNG: GỌI API LƯU XUỐNG DB ---
+              // (Hiển thị loading nhẹ hoặc thông báo nếu cần)
+              try {
+                  // Giả sử bạn đã inject ChoreService vào biến _choreService
+                  // Hàm này sẽ gửi newChore.toJson() lên server
+                  await _choreService.createTemplate(newChore); 
+
+                  // 3. Sau khi lưu thành công thì mới load lại danh sách
+                  _fetchTodayChores();
+                  
+                  // (Tùy chọn) Hiện thông báo thành công
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Thêm công việc thành công!"), backgroundColor: Colors.green),
+                  );
+              } catch (e) {
+                  print("Lỗi tạo việc: $e");
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
+                  );
+              }
+            }
+          },
+
           backgroundColor: const Color(0xFF40C4C6),
           elevation: 4,
           shape: const CircleBorder(),
@@ -298,7 +329,6 @@ class _ChoreScreenState extends State<ChoreScreen> {
                         ...currentList.map((chore) {
                           return ChoreItemCard(
                             title: chore.title,
-                            // SỬA: Dùng assigneeName từ Model mới
                             assignee: chore.assigneeName, 
                             isDone: chore.isDone,
                             iconAsset: chore.iconAsset,
@@ -306,21 +336,21 @@ class _ChoreScreenState extends State<ChoreScreen> {
                               _showConfirmDialog(chore);
                             },
                             onTapCard: () async {
+                              // 1. Chờ kết quả từ màn hình chi tiết
+                              // result sẽ là true nếu người dùng bấm "Lưu" hoặc "Xóa" thành công
                               final result = await Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => ChoreDetailScreen(chore: chore),
                                 ),
                               );
-                              
-                              // Logic update local khi về từ trang chi tiết (nếu cần)
-                              if (result != null && result == "DELETE") {
-                                setState(() {
-                                  allChores.removeWhere((c) => c.id == chore.id);
-                                });
+
+                              // 2. Chỉ cần kiểm tra nếu có thay đổi (result == true) thì load lại
+                              if (result == true) {
+                                _fetchTodayChores(); 
+                                // Hàm này sẽ tự gọi setState và làm mới danh sách, 
+                                // bạn không cần tự removeWhere thủ công nữa cho đỡ rối.
                               }
-                              // Tốt nhất là load lại data cho đồng bộ
-                              _fetchData();
                             },
                           );
                         }),
