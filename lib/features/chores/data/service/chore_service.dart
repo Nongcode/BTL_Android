@@ -6,7 +6,6 @@ import '../models/chore_model.dart';
 class ChoreService {
   
   // 1. Lấy danh sách việc hôm nay (GET)
-  // Logic: API trả về JSON -> Model convert thành Object
   Future<List<Chore>> getTodayChores() async {
     try {
       final response = await http.get(Uri.parse(ApiUrls.todayChores));
@@ -16,7 +15,6 @@ class ChoreService {
         
         if (body['success'] == true) {
           final List<dynamic> data = body['data'];
-          // Model Chore.fromJson sẽ tự lo phần map snake_case sang camelCase
           return data.map((item) => Chore.fromJson(item)).toList();
         }
       }
@@ -28,35 +26,23 @@ class ChoreService {
   }
 
   // 2. Tạo công việc mẫu mới (POST)
-  // SỬA ĐỔI LỚN: Thay vì truyền title, points... ta truyền thẳng object Chore
-  Future<bool> createChoreTemplate(Chore newChore) async {
+  // [CẬP NHẬT] Đổi tên thành createTemplate và xóa logic hardcode
+  Future<bool> createTemplate(Chore newChore) async {
     try {
-      // Gọi hàm toJson() của Model để đóng gói dữ liệu
-      // Hàm này đã tự xử lý việc map sang snake_case (base_points, icon_type...)
+      // Vì AddChoreScreen đã xử lý logic ID và Rotation rất chuẩn rồi
+      // Nên ở đây ta chỉ cần đóng gói và gửi đi thôi.
       final Map<String, dynamic> bodyData = newChore.toJson();
 
-      // LOGIC XỬ LÝ ID USER (Tạm thời):
-      // Vì UI đang trả về tên "Minh", "Tuân"... nhưng Backend cần ID (1, 2, 3)
-      // Ta xử lý nhanh ở đây (Sau này nên làm chuẩn từ Dropdown)
-      int mapUserToId(String name) {
-        if (name.contains('Long')) return 1;
-        if (name.contains('Minh')) return 2;
-        if (name.contains('Tuân')) return 3;
-        return 1; // Mặc định
+      // [QUAN TRỌNG] Kiểm tra lại assignee_id lần cuối
+      // Nếu UI chưa gửi ID (null), ta có thể fallback về 0 hoặc xử lý tùy ý
+      if (bodyData['assignee_id'] == null) {
+         bodyData['assignee_id'] = 1; // ID mặc định nếu lỡ null
       }
 
-      // Backend cần rotation_order là mảng ID [1, 2, 3]
-      // Ta tạo logic giả: Luôn xoay vòng qua 3 người này
-      bodyData['rotation_order'] = [1, 2, 3]; 
-      
-      // Override lại assignee_id dựa trên tên người dùng chọn
-      // (Lưu ý: Với Template xoay vòng, assignee_id ban đầu không quá quan trọng, nhưng cứ gửi cho đủ)
-      bodyData['assignee_id'] = mapUserToId(newChore.assigneeName); 
-
-      print("Body gửi đi: ${jsonEncode(bodyData)}"); // Log để debug
+      print("Body gửi đi: ${jsonEncode(bodyData)}"); // Log để kiểm tra
 
       final response = await http.post(
-        Uri.parse(ApiUrls.templates),
+        Uri.parse(ApiUrls.templates), // Đảm bảo URL này đúng: .../api/chores/templates
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(bodyData),
       );
@@ -64,12 +50,12 @@ class ChoreService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         return true;
       } else {
-        print("Lỗi tạo mới: ${response.body}");
+        print("Lỗi tạo mới từ Server: ${response.body}");
         return false;
       }
     } catch (e) {
-      print('Error createChore: $e');
-      return false;
+      print('Error createTemplate: $e');
+      throw e; // Ném lỗi để UI hiển thị SnackBar đỏ
     }
   }
 
@@ -86,6 +72,33 @@ class ChoreService {
       return response.statusCode == 200;
     } catch (e) {
       print('Error completeChore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateTemplate(String id, Chore updatedChore) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${ApiUrls.templates}/$id'), // Đảm bảo URL đúng: .../api/chores/templates/:id
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(updatedChore.toJson()),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error updateTemplate: $e');
+      return false;
+    }
+  }
+
+  // 5. Xóa Template (DELETE)
+  Future<bool> deleteTemplate(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('${ApiUrls.templates}/$id'),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error deleteTemplate: $e');
       return false;
     }
   }
