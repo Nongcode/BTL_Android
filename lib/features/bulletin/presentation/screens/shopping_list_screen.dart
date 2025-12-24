@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import 'add_shopping_item_screen.dart';
+import 'shopping_item_detail_screen.dart';
+
 
 class ShoppingListScreen extends StatefulWidget {
   const ShoppingListScreen({super.key});
@@ -195,8 +197,18 @@ class _ShoppingItemCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
+  @override
+Widget build(BuildContext context) {
+  return InkWell(
+    borderRadius: BorderRadius.circular(16),
+    onTap: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const ShoppingItemDetailScreen(),
+        ),
+      );
+    },
+    child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -251,13 +263,13 @@ class _ShoppingItemCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () {
-              // TODO: menu (sửa, xoá,...)
-            },
+            onPressed: () {},
             icon: const Icon(Icons.more_vert_rounded, size: 20),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }
+}
+
