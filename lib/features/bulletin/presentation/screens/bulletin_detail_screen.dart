@@ -3,11 +3,87 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import 'package:btl_android_flutter/features/bulletin/presentation/widgets/index.dart';
 
-class BulletinDetailScreen extends StatelessWidget {
-  const BulletinDetailScreen({super.key});
+// API + Models
+import 'package:btl_android_flutter/features/bulletin/data/service/bulletin_service.dart';
+import 'package:btl_android_flutter/features/bulletin/data/models/bulletin_model.dart';
+import 'package:btl_android_flutter/features/bulletin/data/models/bulletin_comment_model.dart';
+
+class BulletinDetailScreen extends StatefulWidget {
+  final int houseId;
+  final Bulletin note;
+
+  const BulletinDetailScreen({
+    super.key,
+    required this.houseId,
+    required this.note,
+  });
+
+  @override
+  State<BulletinDetailScreen> createState() => _BulletinDetailScreenState();
+}
+
+class _BulletinDetailScreenState extends State<BulletinDetailScreen> {
+  final BulletinService _service = BulletinService();
+
+  bool _loadingComments = false;
+  List<BulletinComment> _comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComments();
+  }
+
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return "";
+    return "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}";
+  }
+
+  Future<void> _loadComments() async {
+    setState(() => _loadingComments = true);
+    try {
+      final data = await _service.getComments(
+        houseId: widget.houseId,
+        targetType: "note",
+        targetId: widget.note.id,
+      );
+      setState(() => _comments = data);
+    } finally {
+      if (mounted) setState(() => _loadingComments = false);
+    }
+  }
+
+  Future<void> _deleteNote() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Xóa ghi chú?"),
+        content: const Text("Bạn có chắc muốn xóa ghi chú này không?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Hủy")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text("Xóa")),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    final success = await _service.deleteNote(id: widget.note.id);
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.of(context).pop(true); // báo về list để reload
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Xóa thất bại.")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final n = widget.note;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -21,42 +97,35 @@ class BulletinDetailScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   _buildHeader(context),
                   const SizedBox(height: 16),
-                  _buildInfoSection(),
+                  _buildInfoSection(n),
                   const SizedBox(height: 16),
-                  _buildMainContentCard(),
+                  _buildMainContentCard(n),
                   const SizedBox(height: 20),
                   _buildCommentSection(),
                 ],
               ),
             ),
 
-            // Ô nhập bình luận + nút gửi
+            // (comment UI giữ lại, nhưng bạn chưa có JWT token thì chỉ xem comments)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
               child: Container(
                 color: Colors.transparent,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(24),
                         ),
                         child: Text(
-                          "Viết bình luận...",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade600,
-                          ),
+                          "Viết bình luận... (cần đăng nhập)",
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                         ),
                       ),
                     ),
@@ -67,10 +136,7 @@ class BulletinDetailScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFF3AD6C8),
-                            Color(0xFF15B2E0),
-                          ],
+                          colors: [Color(0xFF3AD6C8), Color(0xFF15B2E0)],
                         ),
                         boxShadow: [
                           BoxShadow(
@@ -82,13 +148,11 @@ class BulletinDetailScreen extends StatelessWidget {
                       ),
                       child: IconButton(
                         onPressed: () {
-                          // TODO: gửi bình luận
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Chức năng comment cần JWT token.")),
+                          );
                         },
-                        icon: const Icon(
-                          Icons.send_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                        icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                       ),
                     ),
                   ],
@@ -101,52 +165,46 @@ class BulletinDetailScreen extends StatelessWidget {
     );
   }
 
-  // HEADER trên cùng: back 
- Widget _buildHeader(BuildContext context) {
-  return Container(
-    height: 80,
-    width: double.infinity,
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF27C5C5), Color(0xFF15B2E0)],
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      height: 80,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF27C5C5), Color(0xFF15B2E0)],
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
       ),
-      borderRadius: BorderRadius.vertical(
-        bottom: Radius.circular(20),
-      ),
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IconButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
             ),
           ),
-        ),
-        const Text(
-          "Chi tiết",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+          const Text(
+            "Chi tiết",
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
           ),
-        ),
-      ],
-    ),
-  );
-}
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              onPressed: _deleteNote,
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-
-
-  // INFO trên cùng
-  Widget _buildInfoSection() {
+  Widget _buildInfoSection(Bulletin n) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF4F7F8),
@@ -156,28 +214,20 @@ class BulletinDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Wifi & Liên hệ chủ nhà",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
+          Text(
+            n.title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF3A7BFF).withOpacity(0.14),
+              color: Colors.black.withOpacity(0.06),
               borderRadius: BorderRadius.circular(999),
             ),
-            child: const Text(
-              "Nội quy",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF3A7BFF),
-              ),
+            child: Text(
+              n.category,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 16),
@@ -188,31 +238,23 @@ class BulletinDetailScreen extends StatelessWidget {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: Colors.orange.shade200,
-                child: const Text(
-                  "L",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: Text(
+                  (n.createdBy?.toString() ?? "?").substring(0, 1),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Lương Tuân",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Text(
+                    "User #${n.createdBy ?? "?"}",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    "Hôm qua · 20:15",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                    _formatTime(n.createdAt),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -223,8 +265,7 @@ class BulletinDetailScreen extends StatelessWidget {
     );
   }
 
-  // Thân nội dung chính
-  Widget _buildMainContentCard() {
+  Widget _buildMainContentCard(Bulletin n) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -240,30 +281,21 @@ class BulletinDetailScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Text(
+        children: [
+          const Text(
             "Nội dung chi tiết",
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            "Wifi: DVN T6\n"
-            "Mật khẩu: khongbiet\n\n"
-            "Số chủ nhà: 0386666666\n",
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.4,
-            ),
+            n.content,
+            style: const TextStyle(fontSize: 13, height: 1.4),
           ),
         ],
       ),
     );
   }
 
-  // Phần bình luận
   Widget _buildCommentSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,16 +315,31 @@ class BulletinDetailScreen extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            children: [
-              _buildCommentRow(
-                name: "Phạm Long",
-                initial: "P",
-                time: "2 giờ trước",
-                content: "Wifi hôm nay hơi chậm, chủ nhà có báo gì không?",
-              ),
-                          ],
-          ),
+          child: _loadingComments
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : (_comments.isEmpty
+                  ? Center(
+                      child: Text(
+                        "Chưa có bình luận",
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    )
+                  : Column(
+                      children: _comments.map((c) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildCommentRow(
+                            name: "User #${c.userId ?? "?"}",
+                            initial: (c.userId?.toString() ?? "?").substring(0, 1),
+                            time: c.createdAt?.toString() ?? "",
+                            content: c.content,
+                          ),
+                        );
+                      }).toList(),
+                    )),
         ),
       ],
     );
@@ -312,10 +359,7 @@ class BulletinDetailScreen extends StatelessWidget {
           backgroundColor: Colors.green.shade200,
           child: Text(
             initial,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
         ),
         const SizedBox(width: 10),
@@ -323,28 +367,14 @@ class BulletinDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
               Text(
                 time,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
               const SizedBox(height: 6),
-              Text(
-                content,
-                style: const TextStyle(
-                  fontSize: 13,
-                  height: 1.3,
-                ),
-              ),
+              Text(content, style: const TextStyle(fontSize: 13, height: 1.3)),
             ],
           ),
         ),

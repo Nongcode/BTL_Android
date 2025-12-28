@@ -1,10 +1,17 @@
 // lib/features/bulletin/presentation/screens/add_note_screen.dart
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import 'package:btl_android_flutter/features/bulletin/presentation/widgets/index.dart';
+import 'package:btl_android_flutter/features/bulletin/data/service/bulletin_service.dart';
 
 class AddNoteScreen extends StatefulWidget {
-  const AddNoteScreen({super.key});
+  final int houseId;
+
+  const AddNoteScreen({super.key, required this.houseId});
 
   @override
   State<AddNoteScreen> createState() => _AddNoteScreenState();
@@ -14,7 +21,16 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
 
+  final BulletinService _service = BulletinService();
+  final ImagePicker _picker = ImagePicker();
+
   int _selectedTagIndex = 0;
+  bool _hasReminder = false;
+  bool _isSaving = false;
+
+  File? _selectedImage;
+  String? _uploadedImageUrl;
+  bool _uploadingImage = false;
 
   final List<Map<String, dynamic>> _tags = [
     {"label": "Khẩn cấp", "color": const Color(0xFFFF6B6B)},
@@ -31,6 +47,78 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
     super.dispose();
   }
 
+  Future<void> _pickAndUploadImage() async {
+    final XFile? xfile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (xfile == null) return;
+
+    setState(() {
+      _selectedImage = File(xfile.path);
+      _uploadingImage = true;
+      _uploadedImageUrl = null;
+    });
+
+    final url = await _service.uploadImage(file: _selectedImage!);
+
+    if (!mounted) return;
+    setState(() {
+      _uploadingImage = false;
+      _uploadedImageUrl = url;
+    });
+
+    if (url == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Upload ảnh thất bại.")),
+      );
+    }
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+    final category = _tags[_selectedTagIndex]["label"] as String;
+
+    if (title.isEmpty || content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vui lòng nhập tiêu đề và nội dung.")),
+      );
+      return;
+    }
+
+    if (_uploadingImage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Đang upload ảnh, vui lòng đợi...")),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final ok = await _service.createNote(
+        houseId: widget.houseId,
+        title: title,
+        content: content,
+        category: category,
+        imageUrl: _uploadedImageUrl,
+        hasReminder: _hasReminder,
+        isPinned: false,
+      );
+
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).pop(true); // báo màn trước reload
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Tạo ghi chú thất bại.")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -41,8 +129,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
             _buildHeader(context),
             Expanded(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -50,7 +137,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                     const SizedBox(height: 6),
                     AppTextField(
                       controller: _titleController,
-                      hint: "Ví dụ : wifi, lịch thu tiền nhà,...",
+                      hint: "Ví dụ: Wifi, lịch thu tiền nhà...",
                       maxLines: 1,
                     ),
                     const SizedBox(height: 16),
@@ -59,7 +146,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                     const SizedBox(height: 6),
                     AppTextField(
                       controller: _contentController,
-                      hint: "Nhập nội dung chi tiết của ghi chú...",
+                      hint: "Nhập nội dung chi tiết...",
                       maxLines: 5,
                     ),
                     const SizedBox(height: 16),
@@ -77,7 +164,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                     _buildReminderRow(),
                     const SizedBox(height: 24),
 
-                    _buildSaveButton(context),
+                    _buildSaveButton(),
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -89,34 +176,26 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
     );
   }
 
-  // ----- HEADER -----
   Widget _buildHeader(BuildContext context) {
     return Container(
       height: 80,
       width: double.infinity,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF3AD6C8), Color(0xFF15B2E0)],
-        ),
+        gradient: LinearGradient(colors: [Color(0xFF3AD6C8), Color(0xFF15B2E0)]),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context).pop(false),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          const SizedBox(width: 4),
           const Expanded(
             child: Text(
               "Thêm ghi chú",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(width: 48),
@@ -132,21 +211,20 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
       children: List.generate(_tags.length, (index) {
         final tag = _tags[index];
         final bool isSelected = index == _selectedTagIndex;
+        final Color color = tag["color"] as Color;
 
         return ChoiceChip(
           label: Text(tag["label"]),
           labelStyle: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : tag["color"],
+            color: isSelected ? Colors.white : color,
           ),
           selected: isSelected,
-          selectedColor: tag["color"],
-          backgroundColor: (tag["color"] as Color).withOpacity(0.12),
+          selectedColor: color,
+          backgroundColor: color.withOpacity(0.12),
           showCheckmark: false,
-          onSelected: (_) {
-            setState(() => _selectedTagIndex = index);
-          },
+          onSelected: (_) => setState(() => _selectedTagIndex = index),
         );
       }),
     );
@@ -154,7 +232,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
 
   Widget _buildUploadBox() {
     return Container(
-      height: 70,
+      height: 110,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -168,22 +246,49 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          // TODO: mở picker chọn ảnh
-        },
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        onTap: _uploadingImage ? null : _pickAndUploadImage,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
             children: [
-              const Icon(Icons.file_upload_outlined, size: 20),
-              const SizedBox(height: 4),
-              Text(
-                "Tải lên hình ảnh ",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade700,
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: _selectedImage == null
+                    ? Icon(Icons.image_outlined, color: Colors.grey.shade500, size: 28)
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.file(_selectedImage!, fit: BoxFit.cover),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _uploadingImage ? "Đang tải ảnh lên..." : "Tải lên hình ảnh",
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _uploadedImageUrl != null ? "Đã upload ✅" : "Chọn ảnh từ thư viện",
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    ),
+                  ],
                 ),
               ),
+              if (_uploadingImage)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
             ],
           ),
         ),
@@ -202,39 +307,34 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
         ),
         const Spacer(),
         Switch(
-          value: false,
-          onChanged: (value) {
-            // TODO: logic bật nhắc nhở
-          },
+          value: _hasReminder,
+          onChanged: (value) => setState(() => _hasReminder = value),
         ),
       ],
     );
   }
 
-  Widget _buildSaveButton(BuildContext context) {
+  Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
       height: 50,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           elevation: 4,
         ),
-        onPressed: () {
-          // TODO: validate + gửi dữ liệu ngược lại NewsScreen
-          Navigator.of(context).pop(); // tạm thời quay lại
-        },
-        child: const Text(
-          "Lưu ghi chú",
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
+        onPressed: _isSaving ? null : _save,
+        child: _isSaving
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : const Text(
+                "Lưu ghi chú",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
       ),
     );
   }

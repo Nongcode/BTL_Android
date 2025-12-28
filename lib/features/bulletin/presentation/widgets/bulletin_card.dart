@@ -1,8 +1,5 @@
-// lib/features/bulletin/widgets/bulletin_card.dart
+// lib/features/bulletin/presentation/widgets/bulletin_card.dart
 import 'package:flutter/material.dart';
-
-// từ thư mục widgets sang presentation/screens
-import 'package:btl_android_flutter/features/bulletin/presentation/screens/bulletin_detail_screen.dart';
 
 class BulletinCard extends StatelessWidget {
   final String title;
@@ -10,7 +7,11 @@ class BulletinCard extends StatelessWidget {
   final String tag;
   final Color tagColor;
   final String time;
+
+  /// Chỉ để hiển thị icon điều hướng, không tự navigate nữa
   final bool showNavigate;
+
+  /// Bắt buộc màn cha truyền vào để điều hướng đúng (có houseId/note…)
   final VoidCallback? onTap;
 
   const BulletinCard({
@@ -28,16 +29,7 @@ class BulletinCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: onTap ??
-          () {
-            if (showNavigate) {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const BulletinDetailScreen(),
-                ),
-              );
-            }
-          },
+      onTap: onTap, // ✅ không tự push screen trong widget
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -93,8 +85,7 @@ class BulletinCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: tagColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(999),
@@ -109,11 +100,7 @@ class BulletinCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Icon(
-                  Icons.circle,
-                  size: 4,
-                  color: Colors.grey.shade500,
-                ),
+                Icon(Icons.circle, size: 4, color: Colors.grey.shade500),
                 const SizedBox(width: 6),
                 Text(
                   time,
