@@ -1,0 +1,105 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../../../core/constants/api_urls.dart';
+import '../models/chore_model.dart';
+
+class ChoreService {
+  
+  // 1. Lấy danh sách việc hôm nay (GET)
+  Future<List<Chore>> getTodayChores() async {
+    try {
+      final response = await http.get(Uri.parse(ApiUrls.todayChores));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        
+        if (body['success'] == true) {
+          final List<dynamic> data = body['data'];
+          return data.map((item) => Chore.fromJson(item)).toList();
+        }
+      }
+      throw Exception('Lỗi server: ${response.statusCode}');
+    } catch (e) {
+      print('Error getTodayChores: $e');
+      return []; 
+    }
+  }
+
+  // 2. Tạo công việc mẫu mới (POST)
+  // [CẬP NHẬT] Đổi tên thành createTemplate và xóa logic hardcode
+  Future<bool> createTemplate(Chore newChore) async {
+    try {
+      // Vì AddChoreScreen đã xử lý logic ID và Rotation rất chuẩn rồi
+      // Nên ở đây ta chỉ cần đóng gói và gửi đi thôi.
+      final Map<String, dynamic> bodyData = newChore.toJson();
+
+      // [QUAN TRỌNG] Kiểm tra lại assignee_id lần cuối
+      // Nếu UI chưa gửi ID (null), ta có thể fallback về 0 hoặc xử lý tùy ý
+      if (bodyData['assignee_id'] == null) {
+         bodyData['assignee_id'] = 1; // ID mặc định nếu lỡ null
+      }
+
+      print("Body gửi đi: ${jsonEncode(bodyData)}"); // Log để kiểm tra
+
+      final response = await http.post(
+        Uri.parse(ApiUrls.templates), // Đảm bảo URL này đúng: .../api/chores/templates
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(bodyData),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      } else {
+        print("Lỗi tạo mới từ Server: ${response.body}");
+        return false;
+      }
+    } catch (e) {
+      print('Error createTemplate: $e');
+      throw e; // Ném lỗi để UI hiển thị SnackBar đỏ
+    }
+  }
+
+  // 3. Hoàn thành công việc (PATCH)
+  Future<bool> completeChore(String choreId, int userId) async {
+    try {
+      final url = '${ApiUrls.chores}/$choreId/complete';
+      final response = await http.patch(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({"userId": userId}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error completeChore: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateTemplate(String id, Chore updatedChore) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${ApiUrls.templates}/$id'), // Đảm bảo URL đúng: .../api/chores/templates/:id
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(updatedChore.toJson()),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error updateTemplate: $e');
+      return false;
+    }
+  }
+
+  // 5. Xóa Template (DELETE)
+  Future<bool> deleteTemplate(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('${ApiUrls.templates}/$id'),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error deleteTemplate: $e');
+      return false;
+    }
+  }
+}

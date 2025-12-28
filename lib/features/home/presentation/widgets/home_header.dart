@@ -34,9 +34,9 @@ class HomeHeader extends StatelessWidget {
             // Thay vì dùng Icon + RichText, ta dùng Image.asset
             Image.asset(
               'assets/images/logo.png',
-              height: 150,              
-              width: 250,               
-              fit: BoxFit.contain,      
+              height: 150,
+              width: 250,
+              fit: BoxFit.contain,   
             ),
             
             // --- KẾT THÚC PHẦN THAY THẾ ---

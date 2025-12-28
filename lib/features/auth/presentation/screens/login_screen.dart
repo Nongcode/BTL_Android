@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: 'Nhập số điện thoại của bạn',
-                  prefixIcon: const Icon(Icons.email, color: Color(0xFF5DBDD4)),
+                  prefixIcon: const Icon(Icons.phone, color: Color(0xFF5DBDD4)),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Colors.grey),

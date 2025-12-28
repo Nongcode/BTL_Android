@@ -1,8 +1,10 @@
+import 'package:btl_android_flutter/features/chores/data/service/chore_service.dart';
 import 'package:flutter/material.dart';
 import '../../data/models/chore_model.dart';
 import '../widgets/chore_stat_card.dart';
 import '../widgets/chore_item_card.dart';
 import '../widgets/score_card.dart';
+import 'add_chore_screen.dart'; // <--- Import màn hình thêm mới
 import 'chore_detail_screen.dart';
 
 class ChoreScreen extends StatefulWidget {
@@ -13,73 +15,51 @@ class ChoreScreen extends StatefulWidget {
 }
 
 class _ChoreScreenState extends State<ChoreScreen> {
-  // Biến theo dõi tab đang chọn: 0=Tất cả, 1=Đã xong, 2=Chưa xong
+  // 1. Khởi tạo Service
+  final ChoreService _choreService = ChoreService();
+  
+  // 2. Biến trạng thái
   int _selectedTabIndex = 0;
+  List<Chore> allChores = []; // List rỗng, sẽ được lấp đầy bởi API
+  bool _isLoading = true;     // Trạng thái đang tải
 
-  // 1. DỮ LIỆU ẢO (MOCK DATA)
-  // Đổi tên thành allChores để khớp với logic bên dưới
-  List<Chore> allChores = [
-    Chore(
-      id: '1', 
-      title: 'Quét nhà lau nhà', 
-      assignee: 'Minh', 
-      isDone: true, 
-      iconAsset: 'assets/images/icons/broom.png' // <--- Ảnh cái chổi
-    ),
-    Chore(
-      id: '2', 
-      title: 'Phơi quần áo', 
-      assignee: 'Tuân', 
-      isDone: true,
-      iconAsset: 'assets/images/icons/laundry.png' // <--- Ảnh quần áo
-    ),
-    Chore(
-      id: '3', 
-      title: 'Đi chợ mua thức ăn', 
-      assignee: 'Tuân', 
-      isDone: false,
-      iconAsset: 'assets/images/icons/grocery.png' // <--- Ảnh giỏ hàng
-    ),
-    Chore(
-      id: '4', 
-      title: 'Nấu ăn', 
-      assignee: 'Long', 
-      isDone: false,
-      iconAsset: 'assets/images/icons/cooking.png' // <--- Ảnh nồi niêu
-    ),
-    Chore(
-      id: '5', 
-      title: 'Đổ rác', 
-      assignee: 'Long', 
-      isDone: false,
-      iconAsset: 'assets/images/icons/trash.png' // <--- Ảnh thùng rác
-    ),
-    Chore(
-      id: '6', 
-      title: 'Giặt quần áo', 
-      assignee: 'Minh', 
-      isDone: false,
-      iconAsset: 'assets/images/icons/wash_clothes.png'
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchTodayChores();
+  }
 
-  // Hàm lọc danh sách dựa trên tab đang chọn
+  // --- HÀM GỌI API LẤY DANH SÁCH ---
+  Future<void> _fetchTodayChores() async {
+    setState(() => _isLoading = true); // Hiện loading
+    try {
+      final chores = await _choreService.getTodayChores(); // Gọi Service lấy việc hôm nay
+      setState(() {
+        allChores = chores;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("Lỗi tải dữ liệu: $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // Hàm lọc danh sách
   List<Chore> get filteredChores {
     if (_selectedTabIndex == 1) {
       return allChores.where((chore) => chore.isDone == true).toList();
     } else if (_selectedTabIndex == 2) {
       return allChores.where((chore) => chore.isDone == false).toList();
     }
-    return allChores; // Tab 0 trả về tất cả
+    return allChores;
   }
 
-  // Hàm tính toán số lượng để hiển thị lên thẻ
+  // Hàm tính toán
   int get totalCount => allChores.length;
   int get doneCount => allChores.where((c) => c.isDone).length;
   int get pendingCount => allChores.where((c) => !c.isDone).length;
 
-  // 2. HÀM HIỂN THỊ POPUP XÁC NHẬN
-  // Sửa: Nhận vào đối tượng Chore thay vì index để tránh lỗi khi lọc list
+  // --- HÀM XỬ LÝ HOÀN THÀNH CÔNG VIỆC (GỌI API) ---
   void _showConfirmDialog(Chore chore) {
     showDialog(
       context: context,
@@ -88,9 +68,8 @@ class _ChoreScreenState extends State<ChoreScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
           content: Column(
-            mainAxisSize: MainAxisSize.min, // Popup chỉ to vừa đủ nội dung
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Nội dung Text
               RichText(
                 textAlign: TextAlign.center,
                 text: TextSpan(
@@ -103,30 +82,27 @@ class _ChoreScreenState extends State<ChoreScreen> {
                     ),
                     const TextSpan(text: " giúp "),
                     TextSpan(
-                      text: "${chore.assignee} ?",
+                      // Lưu ý: Dùng assigneeName khớp với Model mới
+                      text: "${chore.assigneeName} ?",
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-              
-              // Điểm thưởng
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text("Điểm thưởng tích lũy", style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text("+ 2 điểm", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                children: [
+                  const Text("Điểm thưởng dự kiến", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text("+ ${chore.points} điểm", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
                 ],
               ),
               const SizedBox(height: 30),
-
-              // Hai nút bấm Hủy / Xác nhận
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context), // Tắt popup
+                      onPressed: () => Navigator.pop(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
@@ -139,15 +115,26 @@ class _ChoreScreenState extends State<ChoreScreen> {
                   const SizedBox(width: 15),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        // LOGIC QUAN TRỌNG: Cập nhật trạng thái
-                        setState(() {
-                          chore.isDone = true;
-                        });
-                        Navigator.pop(context); // Tắt popup sau khi xong
+                      onPressed: () async {
+                        Navigator.pop(context); // Tắt popup trước
+                        
+                        // GỌI API COMPLETE
+                        // Giả sử User hiện tại là ID 1 (Long)
+                        final success = await _choreService.completeChore(chore.id, 1);
+
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Thành công! Điểm đã được cộng.'), backgroundColor: Colors.green),
+                          );
+                          _fetchTodayChores(); // Tải lại danh sách để cập nhật giao diện
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Lỗi kết nối Server!'), backgroundColor: Colors.red),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF66CC33), // Màu xanh lá
+                        backgroundColor: const Color(0xFF66CC33),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -164,145 +151,81 @@ class _ChoreScreenState extends State<ChoreScreen> {
     );
   }
 
-  void _showAddChoreDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: Colors.grey[50], // Nền hơi xám nhẹ giống thiết kế
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Tiêu đề
-                Row(
-                  children: const [
-                    Icon(Icons.library_add_check_outlined, color: Colors.black54),
-                    SizedBox(width: 10),
-                    Text("Thêm công việc mới", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-                  ],
-                ),
-                const SizedBox(height: 20),
+  // --- HÀM THÊM MỚI (GỌI API) ---
+  void _navigateToAddScreen() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AddChoreScreen()),
+    );
 
-                // 2. Input Tên công việc
-                _buildTextFieldInput(hint: "Nhập tên công việc"),
-                const SizedBox(height: 15),
+    // Nếu có dữ liệu trả về từ màn hình Add
+    if (result != null && result is Chore) {
+      // Gọi API tạo mới
+      final success = await _choreService.createTemplate(result);
 
-                // 3. Input Điểm thưởng
-                _buildTextFieldInput(hint: "Nhập điểm thưởng công việc", keyboardType: TextInputType.number),
-                const SizedBox(height: 15),
-
-                _buildTextFieldInput(hint: "Nhập hạn hoàn thành công việc"),
-                const SizedBox(height: 15),
-
-                _buildTextFieldInput(hint: "Nhập ghi chú"),
-                const SizedBox(height: 15),
-
-                // 4. Hai Dropdown trên 1 hàng
-                Row(
-                  children: [
-                    Expanded(child: _buildDropdownInput(hint: "Người nhận phân công")),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildDropdownInput(hint: "Loại công việc")),
-                  ],
-                ),
-                const SizedBox(height: 30),
-
-                // 5. Nút bấm Action
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                        ),
-                        child: const Text("Hủy", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // Logic thêm mới sẽ viết ở đây sau
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF40C4C6), // Màu xanh Teal chủ đạo
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                        ),
-                        child: const Text("Thêm việc mới", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                )
-              ],
-            ),
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã tạo việc mẫu: ${result.title}'),
+            backgroundColor: Colors.green,
           ),
         );
-      },
-    );
+        // Lưu ý: Việc mới tạo là Template, có thể chưa hiện ngay ở danh sách Today
+        // trừ khi Backend có logic tự sinh việc. Ta cứ load lại cho chắc.
+        _fetchTodayChores(); 
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tạo thất bại!'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
-  Widget _buildTextFieldInput({required String hint, TextInputType keyboardType = TextInputType.text}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.blueGrey,),
-      ),
-      child: TextField(
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdownInput({required String hint}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.blueGrey,),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          hint: Text(hint, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-          items: const [], // Chưa có dữ liệu, để rỗng
-          onChanged: (val) {},
-          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
-        ),
-      ),
-    );
-  }
+  // ... (Giữ nguyên các hàm _buildTextFieldInput, _buildDropdownInput nếu bạn dùng cho mục đích khác, 
+  // nhưng ở màn hình này có vẻ không dùng đến vì đã tách sang AddChoreScreen)
 
   @override
   Widget build(BuildContext context) {
-    // Lấy danh sách đã lọc để hiển thị
     final currentList = filteredChores;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
 
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 80.0), // Đẩy lên 90px để tránh thanh Menu
+        padding: const EdgeInsets.only(bottom: 80.0), // Padding này để tránh bị che bởi BottomBar (nếu có)
         child: FloatingActionButton(
-          onPressed: _showAddChoreDialog,
+          onPressed: () async {
+            // 1. Chờ kết quả từ màn hình thêm mới
+            final newChore = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AddChoreScreen()),
+            );
+
+            // 2. Kiểm tra kết quả trả về
+            if (newChore != null) {
+              // --- BƯỚC QUAN TRỌNG: GỌI API LƯU XUỐNG DB ---
+              // (Hiển thị loading nhẹ hoặc thông báo nếu cần)
+              try {
+                  // Giả sử bạn đã inject ChoreService vào biến _choreService
+                  // Hàm này sẽ gửi newChore.toJson() lên server
+                  await _choreService.createTemplate(newChore); 
+
+                  // 3. Sau khi lưu thành công thì mới load lại danh sách
+                  _fetchTodayChores();
+                  
+                  // (Tùy chọn) Hiện thông báo thành công
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Thêm công việc thành công!"), backgroundColor: Colors.green),
+                  );
+              } catch (e) {
+                  print("Lỗi tạo việc: $e");
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
+                  );
+              }
+            }
+          },
+
           backgroundColor: const Color(0xFF40C4C6),
           elevation: 4,
           shape: const CircleBorder(),
@@ -311,7 +234,10 @@ class _ChoreScreenState extends State<ChoreScreen> {
       ),
 
       body: SafeArea(
-        child: SingleChildScrollView(
+        // Hiển thị Loading khi đang gọi API
+        child: _isLoading 
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFF40C4C6)))
+        : SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -326,28 +252,25 @@ class _ChoreScreenState extends State<ChoreScreen> {
                   ),
                 ),
 
-                // 2. Hàng Thẻ Thống Kê (Dùng Row + Expanded để chia đều)
+                // 2. Thẻ Thống Kê
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Tab 1: Tất cả
                     Expanded(
                       child: ChoreStatCard(
-                        title: "Tất cả công việc",
-                        count: "$totalCount công việc",                      
+                        title: "Tất cả",
+                        count: "$totalCount việc",                      
                         iconColor: Colors.cyan,
                         titleColor: Colors.blue,
                         isSelected: _selectedTabIndex == 0,
                         onTap: () => setState(() => _selectedTabIndex = 0),
                       ),
                     ),
-                    const SizedBox(width: 10), // Khoảng cách giữa các thẻ
-
-                    // Tab 2: Đã xong
+                    const SizedBox(width: 10),
                     Expanded(
                       child: ChoreStatCard(
-                        title: "Công việc đã xong",
-                        count: "$doneCount công việc",
+                        title: "Đã xong",
+                        count: "$doneCount việc",
                         iconColor: Colors.green,
                         titleColor: Colors.green,
                         isSelected: _selectedTabIndex == 1,
@@ -355,12 +278,10 @@ class _ChoreScreenState extends State<ChoreScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
-
-                    // Tab 3: Chưa xong
                     Expanded(
                       child: ChoreStatCard(
-                        title: "Công việc chưa làm",
-                        count: "$pendingCount công việc",
+                        title: "Chưa làm",
+                        count: "$pendingCount việc",
                         iconColor: Colors.redAccent,
                         titleColor: Colors.red,
                         isSelected: _selectedTabIndex == 2,
@@ -370,9 +291,9 @@ class _ChoreScreenState extends State<ChoreScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 25), // Khoảng cách
+                const SizedBox(height: 25),
 
-              // --- MỚI THÊM: THẺ ĐIỂM TÍCH LŨY ---
+                // Thẻ điểm
                 const ScoreCard(),
 
                 const SizedBox(height: 25),
@@ -393,32 +314,30 @@ class _ChoreScreenState extends State<ChoreScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text("Danh sách công việc", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text("Có ${currentList.length} công việc", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                          Text("Hôm nay: ${currentList.length}", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
                         ],
                       ),
                       const SizedBox(height: 10),
                       const Divider(),
 
-                      // Nếu list rỗng thì báo
                       if (currentList.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 30),
-                          child: Text("Không có công việc nào!", style: TextStyle(color: Colors.grey)),
+                          child: Text("Chưa có công việc nào!", style: TextStyle(color: Colors.grey)),
                         )
                       else
-                        // Dùng map để render danh sách đã lọc
                         ...currentList.map((chore) {
                           return ChoreItemCard(
                             title: chore.title,
-                            assignee: chore.assignee,
+                            assignee: chore.assigneeName, 
                             isDone: chore.isDone,
                             iconAsset: chore.iconAsset,
                             onTapButton: () {
-                              _showConfirmDialog(chore); // Truyền object chore vào popup
+                              _showConfirmDialog(chore);
                             },
-
                             onTapCard: () async {
-                              // 1. Dùng await để đợi kết quả
+                              // 1. Chờ kết quả từ màn hình chi tiết
+                              // result sẽ là true nếu người dùng bấm "Lưu" hoặc "Xóa" thành công
                               final result = await Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -426,31 +345,13 @@ class _ChoreScreenState extends State<ChoreScreen> {
                                 ),
                               );
 
-                              // 2. Kiểm tra kết quả trả về
-                              if (result != null) {
-                                if (result is Chore) {
-                                  // Trường hợp CẬP NHẬT: result là một object Chore mới
-                                  setState(() {
-                                    // Tìm vị trí của công việc cũ trong list
-                                    final index = allChores.indexWhere((c) => c.id == result.id);
-                                    if (index != -1) {
-                                      // Thay thế bằng công việc mới (đã sửa tên, người làm...)
-                                      allChores[index] = result;
-                                    }
-                                  });
-                                } else if (result == "DELETE") {
-                                  // Trường hợp XÓA: result là chuỗi "DELETE"
-                                  setState(() {
-                                    allChores.removeWhere((c) => c.id == chore.id);
-                                  });
-                                  
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Đã xóa công việc!')),
-                                  );
-                                }
+                              // 2. Chỉ cần kiểm tra nếu có thay đổi (result == true) thì load lại
+                              if (result == true) {
+                                _fetchTodayChores(); 
+                                // Hàm này sẽ tự gọi setState và làm mới danh sách, 
+                                // bạn không cần tự removeWhere thủ công nữa cho đỡ rối.
                               }
                             },
-                            
                           );
                         }),
                     ],
