@@ -57,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Email field
               const Text(
-                'Email',
+                'Số điện thoại',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
