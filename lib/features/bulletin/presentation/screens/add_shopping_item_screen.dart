@@ -1,10 +1,18 @@
 // lib/features/bulletin/presentation/screens/add_shopping_item_screen.dart
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../../../../core/constants/app_colors.dart';
+import 'package:btl_android_flutter/features/bulletin/data/service/bulletin_service.dart';
+
 import 'package:btl_android_flutter/features/bulletin/presentation/widgets/index.dart';
 
 class AddShoppingItemScreen extends StatefulWidget {
-  const AddShoppingItemScreen({super.key});
+  final int houseId;
+
+  const AddShoppingItemScreen({super.key, required this.houseId});
 
   @override
   State<AddShoppingItemScreen> createState() => _AddShoppingItemScreenState();
@@ -15,12 +23,92 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
   final _noteController = TextEditingController();
   final _quantityController = TextEditingController();
 
+  final BulletinService _service = BulletinService();
+  final ImagePicker _picker = ImagePicker();
+
+  bool _isSaving = false;
+
+  File? _selectedImage;
+  String? _uploadedImageUrl;
+  bool _uploadingImage = false;
+
   @override
   void dispose() {
     _nameController.dispose();
     _noteController.dispose();
     _quantityController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final XFile? xfile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (xfile == null) return;
+
+    setState(() {
+      _selectedImage = File(xfile.path);
+      _uploadingImage = true;
+      _uploadedImageUrl = null;
+    });
+
+    final url = await _service.uploadImage(file: _selectedImage!);
+
+    if (!mounted) return;
+    setState(() {
+      _uploadingImage = false;
+      _uploadedImageUrl = url;
+    });
+
+    if (url == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Upload ảnh thất bại.")));
+    }
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    final note = _noteController.text.trim();
+    final qty = int.tryParse(_quantityController.text.trim());
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vui lòng nhập tên mặt hàng.")),
+      );
+      return;
+    }
+
+    if (_uploadingImage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Đang upload ảnh, vui lòng đợi...")),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final ok = await _service.createItem(
+        houseId: widget.houseId,
+        itemName: name,
+        itemNote: note.isEmpty ? null : note,
+        quantity: qty,
+        imageUrl: _uploadedImageUrl,
+        isChecked: false,
+      );
+
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).pop(true);
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Tạo mặt hàng thất bại.")));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -33,8 +121,10 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
             _buildHeader(context),
             Expanded(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -43,6 +133,7 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
                     AppTextField(
                       controller: _nameController,
                       hint: "Ví dụ: Giấy vệ sinh...",
+                      maxLines: 1,
                     ),
                     const SizedBox(height: 16),
 
@@ -51,6 +142,7 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
                     AppTextField(
                       controller: _noteController,
                       hint: "Ví dụ: loại, kích thước, thương hiệu...",
+                      maxLines: 2,
                     ),
                     const SizedBox(height: 16),
 
@@ -58,8 +150,9 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
                     const SizedBox(height: 6),
                     AppTextField(
                       controller: _quantityController,
-                      hint: "Ví dụ: 2 cuộn, 3 chai...",
-                      keyboardType: TextInputType.text,
+                      hint: "Ví dụ: 2",
+                      keyboardType: TextInputType.number,
+                      maxLines: 1,
                     ),
                     const SizedBox(height: 16),
 
@@ -68,7 +161,7 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
                     _buildUploadBox(),
                     const SizedBox(height: 24),
 
-                    _buildSaveButton(context),
+                    _buildSaveButton(),
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -94,10 +187,9 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context).pop(false),
             icon: const Icon(Icons.arrow_back, color: Colors.white),
           ),
-          const SizedBox(width: 4),
           const Expanded(
             child: Text(
               "Thêm mặt hàng",
@@ -117,7 +209,7 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
 
   Widget _buildUploadBox() {
     return Container(
-      height: 70,
+      height: 110,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -131,22 +223,60 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          // TODO: mở picker chọn ảnh
-        },
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+        onTap: _uploadingImage ? null : _pickAndUploadImage,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
             children: [
-              const Icon(Icons.file_upload_outlined, size: 20),
-              const SizedBox(height: 4),
-              Text(
-                "Tải lên hình ảnh ",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade700,
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: _selectedImage == null
+                    ? Icon(
+                        Icons.image_outlined,
+                        color: Colors.grey.shade500,
+                        size: 28,
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.file(_selectedImage!, fit: BoxFit.cover),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _uploadingImage
+                          ? "Đang tải ảnh lên..."
+                          : "Tải lên hình ảnh",
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _uploadedImageUrl != null
+                          ? "Đã upload ✅"
+                          : "Chọn ảnh từ thư viện",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              if (_uploadingImage)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
             ],
           ),
         ),
@@ -154,7 +284,7 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
     );
   }
 
-  Widget _buildSaveButton(BuildContext context) {
+  Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
       height: 50,
@@ -166,18 +296,24 @@ class _AddShoppingItemScreenState extends State<AddShoppingItemScreen> {
           ),
           elevation: 4,
         ),
-        onPressed: () {
-          // TODO: validate + gửi dữ liệu ngược lại ShoppingList
-          Navigator.of(context).pop(); // tạm thời quay lại
-        },
-        child: const Text(
-          "Lưu mặt hàng",
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
+        onPressed: _isSaving ? null : _save,
+        child: _isSaving
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Text(
+                "Lưu mặt hàng",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
       ),
     );
   }
