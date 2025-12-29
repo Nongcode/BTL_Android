@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../data/models/finance_model.dart';
+import '../../data/service/finance_service.dart';
 import 'add_expense_screen.dart';
 import 'finance_screen.dart';
 
 class FundDetailScreen extends StatefulWidget {
-  const FundDetailScreen({Key? key}) : super(key: key);
+  final FundSummary? summary;
+  final List<CommonExpense>? expenses;
+  final int houseId;
+
+  const FundDetailScreen({
+    Key? key,
+    this.summary,
+    this.expenses,
+    this.houseId = 1,
+  }) : super(key: key);
 
   @override
   State<FundDetailScreen> createState() => _FundDetailScreenState();
@@ -11,6 +23,60 @@ class FundDetailScreen extends StatefulWidget {
 
 class _FundDetailScreenState extends State<FundDetailScreen> {
   int _selectedMonth = 0;
+  FundSummary? _summary;
+  List<CommonExpense> _expenses = [];
+  bool _loading = false;
+  String? _error;
+  late final FinanceService _service;
+  final NumberFormat _fmt = NumberFormat.currency(
+    locale: 'vi_VN',
+    symbol: 'đ',
+    decimalDigits: 0,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _service = FinanceService(houseId: widget.houseId);
+    _summary = widget.summary;
+    _expenses = widget.expenses ?? [];
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final now = DateTime.now();
+    final month = _selectedMonth == 0
+        ? now.month
+        : now.subtract(const Duration(days: 30)).month;
+    final year = _selectedMonth == 0
+        ? now.year
+        : now.subtract(const Duration(days: 30)).year;
+
+    try {
+      final result = await Future.wait([
+        _service.fetchFundSummary(month: month, year: year),
+        _service.fetchCommonExpenses(month: month, year: year),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _summary = result[0] as FundSummary? ?? _summary;
+        _expenses = (result[1] as List<CommonExpense>? ?? [])
+          ..sort((a, b) => b.expenseDate.compareTo(a.expenseDate));
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Không tải được dữ liệu quỹ';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,29 +88,51 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
           _buildMonthSelector(), // <-- TAB CHUẨN FIGMA
           // --- CONTENT ---
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionTitle("Tổng quỹ"),
-                  const SizedBox(height: 12),
-                  _buildSummaryCardFigma(),
+            child: RefreshIndicator(
+              onRefresh: _loadData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_loading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: CircularProgressIndicator(),
+                        ),
+                      ),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    _sectionTitle("Tổng quỹ"),
+                    const SizedBox(height: 12),
+                    _buildSummaryCardFigma(),
 
-                  const SizedBox(height: 28),
-                  _sectionTitle("Trạng thái thành viên"),
-                  const SizedBox(height: 12),
-                  _buildMemberStatusFigma(),
+                    const SizedBox(height: 28),
+                    _sectionTitle("Trạng thái thành viên"),
+                    const SizedBox(height: 12),
+                    _buildMemberStatusFigma(),
 
-                  const SizedBox(height: 28),
-                  _sectionTitle("Chi tiêu từ quỹ"),
-                  const SizedBox(height: 12),
-                  _buildExpenseListFigma(),
+                    const SizedBox(height: 28),
+                    _sectionTitle("Chi tiêu từ quỹ"),
+                    const SizedBox(height: 12),
+                    _buildExpenseListFigma(),
 
-                  const SizedBox(height: 20),
-                  _buildAddButton(),
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 20),
+                    _buildAddButton(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
           ),
@@ -116,7 +204,10 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
     final bool isSelected = _selectedMonth == index;
 
     return GestureDetector(
-      onTap: () => setState(() => _selectedMonth = index),
+      onTap: () {
+        setState(() => _selectedMonth = index);
+        _loadData();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
@@ -142,6 +233,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
 
   // ========================= SUMMARY CARD ==========================
   Widget _buildSummaryCardFigma() {
+    final summary = _summary;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -161,19 +253,22 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
         children: [
           _infoRow(
             "Mức đóng:",
-            FinanceScreen.contributionAmount.replaceAll(
-              '/người/tháng',
-              '/người',
-            ),
+            summary != null
+                ? _fmt.format(summary.contributionAmount)
+                : FinanceScreen.contributionAmount,
           ),
           const SizedBox(height: 4),
-          _infoRow("Số thành viên:", "3"),
+          _infoRow("Số thành viên:", summary?.totalMembers.toString() ?? "-"),
           const Divider(height: 24),
-          _infoRow("Tổng quỹ:", "1.500.000 đ", valueColor: Color(0xFF00AA55)),
+          _infoRow(
+            "Tổng quỹ:",
+            summary != null ? _fmt.format(summary.totalContributions) : "…",
+            valueColor: const Color(0xFF00AA55),
+          ),
           const SizedBox(height: 4),
           _infoRow(
             "Số dư hiện tại:",
-            "80.000 đ",
+            summary != null ? _fmt.format(summary.currentBalance) : "…",
             valueColor: Color(0xFF5DBDD4),
           ),
         ],
@@ -207,12 +302,18 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
 
   // ======================= MEMBER STATUS ==========================
   Widget _buildMemberStatusFigma() {
-    final members = [("Minh", true), ("Long", false), ("Tuấn", true)];
+    final members = _summary?.memberStatus ?? [];
+    if (members.isEmpty) {
+      return const Text(
+        "Chưa có dữ liệu đóng quỹ",
+        style: TextStyle(color: Colors.grey),
+      );
+    }
 
     return Column(
       children: members.map((m) {
-        final hasPaid = m.$2;
-
+        final hasPaid = m.status == 'contributed';
+        final amountText = hasPaid ? _fmt.format(m.amount) : 'Chưa đóng';
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -234,7 +335,9 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                     radius: 18,
                     backgroundColor: const Color(0xFF5DBDD4),
                     child: Text(
-                      m.$1.substring(0, 1),
+                      m.memberName.isNotEmpty
+                          ? m.memberName.substring(0, 1)
+                          : '?',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -243,7 +346,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    m.$1,
+                    m.memberName,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -265,7 +368,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  hasPaid ? "Đã đóng 500.000 đ" : "Chưa đóng",
+                  amountText,
                   style: TextStyle(
                     color: hasPaid
                         ? const Color(0xFF00AA55)
@@ -284,13 +387,17 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
 
   // ========================= EXPENSE LIST ==========================
   Widget _buildExpenseListFigma() {
-    final expenses = [
-      ("Bình nước uống", "90.000 đ", "Do Long mua • trừ quỹ ngày 10/11"),
-      ("Nước rửa chén", "45.000 đ", "Do Minh mua • trừ quỹ ngày 08/11"),
-    ];
+    if (_expenses.isEmpty) {
+      return const Text(
+        "Chưa có chi tiêu",
+        style: TextStyle(color: Colors.grey),
+      );
+    }
 
     return Column(
-      children: expenses.map((e) {
+      children: _expenses.map((e) {
+        final dateText =
+            '${e.expenseDate.day}/${e.expenseDate.month}/${e.expenseDate.year}';
         return Container(
           margin: const EdgeInsets.only(bottom: 18),
           child: Column(
@@ -301,14 +408,14 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    e.$1,
+                    e.title,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
-                    e.$2,
+                    _fmt.format(e.amount),
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       color: Colors.black87,
@@ -320,7 +427,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
 
               const SizedBox(height: 4),
               Text(
-                e.$3,
+                'Do ${e.paidByName.isNotEmpty ? e.paidByName : 'thành viên'} mua • ngày $dateText',
                 style: TextStyle(fontSize: 13, color: Colors.blue.shade600),
               ),
               const SizedBox(height: 8),
@@ -338,7 +445,10 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const AddExpenseScreen()),
+          MaterialPageRoute(
+            builder: (context) =>
+                AddExpenseScreen(summary: _summary, houseId: _service.houseId),
+          ),
         );
       },
       child: Center(
