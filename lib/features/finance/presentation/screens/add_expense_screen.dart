@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
-import 'split_detail_screen.dart';
+import '../../data/models/finance_model.dart';
+import '../../data/service/finance_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final int initialType; // 0 = Chi từ quỹ, 1 = Chi phát sinh
+  final FundSummary? summary;
+  final int houseId;
 
-  const AddExpenseScreen({Key? key, this.initialType = 0}) : super(key: key);
+  const AddExpenseScreen({
+    Key? key,
+    this.initialType = 0,
+    this.summary,
+    this.houseId = 1,
+  }) : super(key: key);
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -17,15 +25,120 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   DateTime _selectedDate = DateTime.now();
   final TextEditingController _title = TextEditingController();
   final TextEditingController _amount = TextEditingController();
-
-  final List<String> _people = ["Minh", "Long", "Tuấn"];
-
-  String _selectedPerson = "";
+  List<MemberStatus> _members = [];
+  int? _selectedMemberId;
+  bool _submitting = false;
+  late final FinanceService _service;
 
   @override
   void initState() {
     super.initState();
     _selectedType = widget.initialType;
+    _service = FinanceService(houseId: widget.houseId);
+    _members = widget.summary?.memberStatus ?? [];
+    if (_members.isNotEmpty) {
+      _selectedMemberId = _members.first.memberId;
+    } else {
+      _loadMembers();
+    }
+  }
+
+  Future<void> _loadMembers() async {
+    final summary = await _service.fetchFundSummary();
+    if (!mounted) return;
+    setState(() {
+      _members = summary?.memberStatus ?? [];
+      if (_members.isNotEmpty) {
+        _selectedMemberId = _members.first.memberId;
+      }
+    });
+  }
+
+  double _parseAmount() {
+    final raw = _amount.text.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(raw) ?? 0;
+  }
+
+  Future<void> _handleSubmit() async {
+    if (_submitting) return;
+    final title = _title.text.trim();
+    final amount = _parseAmount();
+    if (title.isEmpty || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập tên và số tiền hợp lệ')),
+      );
+      return;
+    }
+    if (_selectedMemberId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Chọn người trả')));
+      return;
+    }
+
+    setState(() => _submitting = true);
+    bool ok = false;
+
+    if (_selectedType == 0) {
+      ok = await _service.addCommonExpense(
+        paidBy: _selectedMemberId!,
+        title: title,
+        description: null,
+        amount: amount,
+        expenseDate: _selectedDate,
+      );
+    } else {
+      // Chia đều cho tất cả thành viên hiện có nếu chưa chọn cấu hình khác.
+      final members = _members.isNotEmpty
+          ? _members
+          : [
+              MemberStatus(
+                memberId: _selectedMemberId!,
+                memberName: '',
+                status: 'pending',
+                amount: 0,
+                contributedAt: null,
+                note: null,
+              ),
+            ];
+      final equalShare = amount / (members.isNotEmpty ? members.length : 1);
+      final sharePercent = 100 / (members.isNotEmpty ? members.length : 1);
+      final splits = members
+          .map(
+            (m) => {
+              'memberId': m.memberId,
+              'sharePercentage': double.parse(sharePercent.toStringAsFixed(2)),
+              'amountOwed': double.parse(equalShare.toStringAsFixed(2)),
+            },
+          )
+          .toList();
+      ok = await _service.addAdHocExpense(
+        paidBy: _selectedMemberId!,
+        title: title,
+        description: null,
+        totalAmount: amount,
+        expenseDate: _selectedDate,
+        splitMethod: _selectedSplit == 0
+            ? 'equal'
+            : _selectedSplit == 1
+            ? 'ratio'
+            : 'custom',
+        splits: splits,
+      );
+    }
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Lưu chi tiêu thành công' : 'Không thể lưu chi tiêu',
+        ),
+        backgroundColor: ok ? Colors.green : Colors.red,
+      ),
+    );
+    if (ok) Navigator.pop(context, true);
   }
 
   @override
@@ -206,7 +319,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             type: TextInputType.number,
           ),
           const SizedBox(height: 16),
-          _buildDropdown("Người trả", "Chọn thành viên", _people),
+          _buildMemberDropdown(),
           const SizedBox(height: 16),
           _buildDatePicker(),
           const SizedBox(height: 12),
@@ -266,13 +379,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  Widget _buildDropdown(String label, String hint, List<String> items) {
+  Widget _buildMemberDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        const Text(
+          "Người trả",
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 6),
         Container(
@@ -282,16 +395,26 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: Colors.grey.shade300),
           ),
-          child: DropdownButton(
-            value: _selectedPerson.isEmpty ? null : _selectedPerson,
+          child: DropdownButton<int>(
+            value: _selectedMemberId,
             underline: const SizedBox(),
             isExpanded: true,
-            hint: Text(hint),
-            items: items
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+            hint: Text(
+              _members.isEmpty ? 'Đang tải thành viên...' : 'Chọn thành viên',
+            ),
+            items: _members
+                .map(
+                  (e) => DropdownMenuItem<int>(
+                    value: e.memberId,
+                    child: Text(
+                      e.memberName.isNotEmpty
+                          ? e.memberName
+                          : 'Thành viên ${e.memberId}',
+                    ),
+                  ),
+                )
                 .toList(),
-            onChanged: (value) =>
-                setState(() => _selectedPerson = value.toString()),
+            onChanged: (value) => setState(() => _selectedMemberId = value),
           ),
         ),
       ],
@@ -409,74 +532,29 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   // ---------------- BUTTONS -------------------
   Widget _buildMainButton() {
-    // Đổi text theo loại chi tiêu
-    final String buttonText = _selectedType == 0
+    final String buttonText = _submitting
+        ? "Đang lưu..."
+        : _selectedType == 0
         ? "Lưu chi tiêu"
-        : "Lưu chi tiêu & tiếp tục chia tiền";
+        : "Lưu chi tiêu phát sinh";
 
-    return GestureDetector(
-      onTap: () {
-        // ❗ kiểm tra nhập đủ dữ liệu cơ bản
-        if (_title.text.isEmpty ||
-            _amount.text.isEmpty ||
-            _selectedPerson.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Vui lòng nhập đầy đủ tên, số tiền và người trả"),
-            ),
-          );
-          return;
-        }
-
-        // Nếu là "Chi từ quỹ sinh hoạt" -> chỉ lưu (tạm thời show SnackBar)
-        if (_selectedType == 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Đã lưu chi tiêu từ quỹ sinh hoạt")),
-          );
-          return;
-        }
-
-        // Nếu là "Chi tiêu phát sinh" -> chuyển sang màn chia tiền chi tiết
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => SplitDetailScreen(
-              title: _title.text,
-              amount: int.parse(_amount.text),
-              payer: _selectedPerson,
-              members: [
-                {"name": "Minh", "color": Colors.red},
-                {"name": "Long", "color": Colors.green},
-                {"name": "Tuấn", "color": Colors.blue},
-              ],
-              splitType: _selectedSplit,
-
-              // THÊM CALLBACK BẮT BUỘC
-              onConfirm: (result) {
-                print("Kết quả chia tiền: $result");
-
-                // TODO: Lưu vào database hoặc Provider sau này
-                // Navigator.pop(context); // nếu muốn đóng màn hình sau khi lưu
-              },
-            ),
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _submitting ? null : _handleSubmit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF7DD4E8),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        );
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF7DD4E8),
-          borderRadius: BorderRadius.circular(12),
         ),
-        child: Center(
-          child: Text(
-            buttonText,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
+        child: Text(
+          buttonText,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -485,12 +563,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Widget _buildCancelButton() {
     return Center(
-      child: Text(
-        "Huỷ",
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: Colors.black87,
+      child: TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text(
+          "Huỷ",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
         ),
       ),
     );

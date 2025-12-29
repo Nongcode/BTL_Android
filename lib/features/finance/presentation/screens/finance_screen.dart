@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../data/models/finance_model.dart';
+import '../../data/service/finance_service.dart';
 import '../widgets/finance_stat_card.dart';
 import 'fund_detail_screen.dart';
 import 'debt_summary_screen.dart';
@@ -17,540 +20,689 @@ class FinanceScreen extends StatefulWidget {
 class _FinanceScreenState extends State<FinanceScreen> {
   int _expenseTabIndex = 0; // 0 = Chi tiêu, 1 = Doanh thu
   late String _contributionAmount;
+  final FinanceService _service = FinanceService(houseId: 1);
+  FundSummary? _summary;
+  List<CommonExpense> _commonExpenses = [];
+  bool _loading = false;
+  String? _error;
+
+  final NumberFormat _currency = NumberFormat.currency(
+    locale: 'vi_VN',
+    symbol: 'đ',
+    decimalDigits: 0,
+  );
 
   @override
   void initState() {
     super.initState();
     _contributionAmount = FinanceScreen.contributionAmount;
+    _loadFinance();
+  }
+
+  Future<void> _loadFinance() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final summary = await _service.fetchFundSummary();
+      final expenses = await _service.fetchCommonExpenses();
+      if (!mounted) return;
+      setState(() {
+        _summary = summary;
+        _commonExpenses = expenses;
+        if (summary != null) {
+          _contributionAmount =
+              "${_currency.format(summary.contributionAmount)} /người";
+          FinanceScreen.contributionAmount = _contributionAmount;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Không tải được dữ liệu quỹ';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   void _editContributionAmount() {
+    final initialNumber =
+        _summary?.contributionAmount ??
+        double.tryParse(_contributionAmount.replaceAll(RegExp(r'[^0-9.]'), ''));
     TextEditingController controller = TextEditingController(
-      text: _contributionAmount,
+      text: (initialNumber != null && initialNumber > 0)
+          ? initialNumber.toStringAsFixed(0)
+          : '',
     );
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Chỉnh sửa mức đóng quỹ sinh hoạt"),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              hintText: "Nhập mức đóng (vd: 500.000 đ/người/tháng)",
-            ),
-            keyboardType: TextInputType.text,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Hủy"),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _contributionAmount = controller.text;
-                  FinanceScreen.contributionAmount = controller.text;
-                });
-                Navigator.of(context).pop();
-              },
-              child: const Text("Lưu"),
-            ),
-          ],
+      builder: (BuildContext dialogContext) {
+        bool isSaving = false;
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              title: const Text("Chỉnh sửa mức đóng quỹ sinh hoạt"),
+              content: TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: "Nhập mức đóng (vd: 500000)",
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text("Hủy"),
+                ),
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final parsed = double.tryParse(controller.text) ?? 0;
+                          if (parsed <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Vui lòng nhập số hợp lệ'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+
+                          setLocalState(() => isSaving = true);
+
+                          final success = await _service.updateFundSettings(
+                            contributionAmount: parsed.toDouble(),
+                          );
+
+                          await Future.delayed(const Duration(seconds: 1));
+
+                          if (!mounted) return;
+
+                          setState(() {
+                            _contributionAmount =
+                                "${_currency.format(parsed)} /người";
+                            FinanceScreen.contributionAmount =
+                                _contributionAmount;
+                          });
+
+                          Navigator.of(dialogContext).pop();
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                success
+                                    ? 'Đã cập nhật mức đóng'
+                                    : 'Cập nhật thất bại, thử lại',
+                              ),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text("Lưu"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
+  String _fmt(num value) => _currency.format(value);
+
   @override
   Widget build(BuildContext context) {
+    final summary = _summary;
     return Scaffold(
       backgroundColor: const Color(0xFFE8F8FB),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Header
-                const Text(
-                  "Quỹ chung",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 28,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  "Tổng quan chi tiêu trong nhà",
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-
-                // 2. Stat Cards (3 cột)
-                Row(
-                  children: [
-                    Expanded(
-                      child: FinanceStatCard(
-                        title: "Tổng chi quỹ",
-                        amount: "1.250.000 đ",
-                        amountColor: const Color(0xFF68A7E3),
-                        icon: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF68A7E3).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.trending_up,
-                              size: 16,
-                              color: Color(0xFF68A7E3),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FinanceStatCard(
-                        title: "Số dư quỹ",
-                        amount: "80.000 đ",
-                        amountColor: const Color(0xFF14B8A6),
-                        icon: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF14B8A6).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.attach_money,
-                              size: 16,
-                              color: Color(0xFF14B8A6),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FinanceStatCard(
-                        title: "Bạn đang nợ",
-                        amount: "150.000 đ",
-                        amountColor: const Color(0xFFFC9F66),
-                        icon: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFC9F66).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.help_outline,
-                              size: 16,
-                              color: Color(0xFFFC9F66),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 28),
-
-                // 3. Quỹ sinh hoạt section
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFF5DBDD4),
-                      width: 1.5,
+        child: RefreshIndicator(
+          onRefresh: _loadFinance,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. Header
+                  const Text(
+                    "Quỹ chung",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 28,
+                      color: Colors.black87,
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 4),
+                  const Text(
+                    "Tổng quan chi tiêu trong nhà",
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 24),
+
+                  if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+
+                  // 2. Stat Cards (3 cột)
+                  Row(
                     children: [
-                      // Header Quỹ sinh hoạt
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "Quỹ sinh hoạt",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.black87,
+                      Expanded(
+                        child: FinanceStatCard(
+                          title: "Tổng chi quỹ",
+                          amount: summary != null
+                              ? _fmt(summary.totalExpenses)
+                              : "…",
+                          amountColor: const Color(0xFF68A7E3),
+                          icon: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF68A7E3).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.trending_up,
+                                size: 16,
+                                color: Color(0xFF68A7E3),
+                              ),
                             ),
                           ),
-                          GestureDetector(
-                            onTap: _editContributionAmount,
-                            child: const Text(
-                              "Chỉnh sửa mức đóng",
-                              style: TextStyle(
-                                color: Color(0xFF5DBDD4),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FinanceStatCard(
+                          title: "Số dư quỹ",
+                          amount: summary != null
+                              ? _fmt(summary.currentBalance)
+                              : "…",
+                          amountColor: const Color(0xFF14B8A6),
+                          icon: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF14B8A6).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.attach_money,
+                                size: 16,
+                                color: Color(0xFF14B8A6),
                               ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Mục đông
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "Mức đóng:",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                              color: Colors.black87,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FinanceStatCard(
+                          title: "Bạn đang nợ",
+                          amount: "0 đ",
+                          amountColor: const Color(0xFFFC9F66),
+                          icon: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFC9F66).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                _contributionAmount,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Colors.black87,
-                                ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.help_outline,
+                                size: 16,
+                                color: Color(0xFFFC9F66),
                               ),
-
-                              // IconButton(
-                              //   onPressed: _editContributionAmount,
-                              //   icon: const Icon(
-                              //     Icons.edit,
-                              //     size: 16,
-                              //     color: Color(0xFF5DBDD4),
-                              //   ),
-                              //   padding: EdgeInsets.zero,
-                              //   constraints: const BoxConstraints(),
-                              // ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Đổ đông (members)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "Đã đóng:",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          Row(
-                            children: const [
-                              _MemberCircle(
-                                label: "M",
-                                color: Color(0xFFE8B4D0),
-                              ),
-                              SizedBox(width: 8),
-                              _MemberCircle(
-                                label: "L",
-                                color: Color(0xFFB8E8B8),
-                              ),
-                              SizedBox(width: 8),
-                              _MemberCircle(
-                                label: "T",
-                                color: Color(0xFFB8E8E8),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Số dự hiện tại
-                      _buildQuotaRow(
-                        "Số dự hiện tại:",
-                        "80.000 đ",
-                        color: const Color(0xFF5DBDD4),
-                      ),
-                      const SizedBox(height: 16),
-
-                      const Divider(thickness: 1),
-                      const SizedBox(height: 16),
-
-                      // Chi tiêu quỹ items
-                      _buildFundExpenseItem(
-                        title: "Binh nước uống",
-                        amount: "90.000 đ - Trừ quỹ ngày 10/11",
-                      ),
-                      const SizedBox(height: 12),
-
-                      _buildFundExpenseItem(
-                        title: "Nước rửa chén",
-                        amount: "40.000 đ - Trừ quỹ ngày 08/11",
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Button Xem tất cả
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const FundDetailScreen(),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF5DBDD4),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            "Xem tất cả chi tiêu quỹ",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
                             ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
 
-                const SizedBox(height: 28),
+                  const SizedBox(height: 28),
 
-                // 4. Chi tiêu phát sinh section
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header with "Thêm chi tiêu mới" button
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            "Chi tiêu phát sinh",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const AddExpenseScreen(initialType: 1),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF5DBDD4),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text(
-                                "Thêm chi tiêu mới",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                  // 3. Quỹ sinh hoạt section
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFF5DBDD4),
+                        width: 1.5,
                       ),
-                      const SizedBox(height: 16),
-
-                      // Tabs
-                      Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              setState(() => _expenseTabIndex = 0);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _expenseTabIndex == 0
-                                    ? const Color(0xFF5DBDD4)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(20),
-                                border: _expenseTabIndex == 0
-                                    ? null
-                                    : Border.all(
-                                        color: Colors.grey.shade300,
-                                        width: 1,
-                                      ),
-                              ),
-                              child: Text(
-                                "Chi tiêu",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: _expenseTabIndex == 0
-                                      ? Colors.white
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          GestureDetector(
-                            onTap: () {
-                              setState(() => _expenseTabIndex = 1);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _expenseTabIndex == 1
-                                    ? const Color(0xFF5DBDD4)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(20),
-                                border: _expenseTabIndex == 1
-                                    ? null
-                                    : Border.all(
-                                        color: Colors.grey.shade300,
-                                        width: 1,
-                                      ),
-                              ),
-                              child: Text(
-                                "Danh sách nợ",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: _expenseTabIndex == 1
-                                      ? Colors.white
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Tab content
-                      if (_expenseTabIndex == 0) ...[
-                        // Chi tiêu list
-                        _buildExpenseItemWithIcon(
-                          icon: "⭐",
-                          title: "Phần thưởng tháng 12",
-                          description: "A được nhận",
-                          date: "1/1/2026",
-                          amount: "100.000 đ",
-                          badge: "Xác nhận",
-                          badgeColor: const Color(0xFFB8D8D0),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildExpenseItemWithIcon(
-                          icon: "",
-                          title: "Phí phát tháng 12",
-                          description: "C bị phạt",
-                          date: "1/1/2026",
-                          amount: "100.000 đ",
-                          badge: "Thành toán",
-                          badgeColor: const Color(0xFFB8D8D0),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildExpenseItemWithIcon(
-                          icon: "",
-                          title: "Dị ăn lẩu cuối tháng",
-                          description: "A đã trả - Chia cho A, B, C",
-                          date: "27/11/2025",
-                          amount: "500.000 đ",
-                          badge: "Chia theo người thêm gia",
-                          badgeColor: const Color(0xFFB8D8D0),
-                          // isHighlight: true,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildExpenseItemWithIcon(
-                          icon: "",
-                          title: "Bánh sinh nhật",
-                          description: "B đã trả - Chia cho A, B, C, D",
-                          date: "27/11/2025",
-                          amount: "200.000 đ",
-                          badge: "Chia đều",
-                          badgeColor: const Color(0xFFB8D8D0),
-                        ),
-                      ] else if (_expenseTabIndex == 1) ...[
-                        // Danh sách nợ
-                        _buildDebtItem(
-                          name: "Tuấn đang nợ Long",
-                          amount: "100.000 đ",
-                        ),
-                        const SizedBox(height: 12),
-                        _buildDebtItem(
-                          name: "Long đang nợ Tuấn",
-                          amount: "200.000 đ",
-                        ),
-                        const SizedBox(height: 20),
-                        Center(
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const DebtSummaryScreen(),
-                                ),
-                              );
-                            },
-
-                            child: const Text(
-                              "Xem chi tiết ai nợ ai",
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header Quỹ sinh hoạt
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Quỹ sinh hoạt",
                               style: TextStyle(
-                                color: Color(0xFF5DBDD4),
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _editContributionAmount,
+                              child: const Text(
+                                "Chỉnh sửa mức đóng",
+                                style: TextStyle(
+                                  color: Color(0xFF5DBDD4),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Mục đông
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Mức đóng:",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  _contributionAmount,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+
+                                // IconButton(
+                                //   onPressed: _editContributionAmount,
+                                //   icon: const Icon(
+                                //     Icons.edit,
+                                //     size: 16,
+                                //     color: Color(0xFF5DBDD4),
+                                //   ),
+                                //   padding: EdgeInsets.zero,
+                                //   constraints: const BoxConstraints(),
+                                // ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Đổ đông (members)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Đã đóng:",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                if (summary?.memberStatus.isNotEmpty == true)
+                                  ...summary!.memberStatus
+                                      .where((m) => m.status == 'contributed')
+                                      .take(4)
+                                      .map(
+                                        (m) => Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                          ),
+                                          child: _MemberCircle(
+                                            label: m.memberName.isNotEmpty
+                                                ? m.memberName[0].toUpperCase()
+                                                : '?',
+                                            color: const Color(0xFFB8E8E8),
+                                          ),
+                                        ),
+                                      ),
+                                if (summary == null ||
+                                    summary.memberStatus
+                                        .where((m) => m.status == 'contributed')
+                                        .isEmpty)
+                                  const Text(
+                                    "Chưa có dữ liệu",
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Số dự hiện tại
+                        _buildQuotaRow(
+                          "Số dự hiện tại:",
+                          summary != null ? _fmt(summary.currentBalance) : "…",
+                          color: const Color(0xFF5DBDD4),
+                        ),
+                        const SizedBox(height: 16),
+
+                        const Divider(thickness: 1),
+                        const SizedBox(height: 16),
+
+                        // Chi tiêu quỹ items
+                        if (_commonExpenses.isEmpty)
+                          const Text(
+                            "Chưa có chi tiêu",
+                            style: TextStyle(color: Colors.grey),
+                          )
+                        else
+                          ..._commonExpenses
+                              .take(3)
+                              .map(
+                                (e) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _buildFundExpenseItem(
+                                    title: e.title,
+                                    amount:
+                                        "${_fmt(e.amount)} - ${e.expenseDate.day}/${e.expenseDate.month}/${e.expenseDate.year}",
+                                  ),
+                                ),
+                              ),
+
+                        const SizedBox(height: 16),
+
+                        // Button Xem tất cả
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => FundDetailScreen(
+                                    summary: summary,
+                                    expenses: _commonExpenses,
+                                    houseId: _service.houseId,
+                                  ),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF5DBDD4),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              "Xem tất cả chi tiêu quỹ",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
                             ),
                           ),
                         ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 30),
-              ],
+                  const SizedBox(height: 28),
+
+                  // 4. Chi tiêu phát sinh section
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with "Thêm chi tiêu mới" button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Chi tiêu phát sinh",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AddExpenseScreen(
+                                      initialType: 1,
+                                      summary: summary,
+                                      houseId: _service.houseId,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF5DBDD4),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  "Thêm chi tiêu mới",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Tabs
+                        Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                setState(() => _expenseTabIndex = 0);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _expenseTabIndex == 0
+                                      ? const Color(0xFF5DBDD4)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: _expenseTabIndex == 0
+                                      ? null
+                                      : Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
+                                        ),
+                                ),
+                                child: Text(
+                                  "Chi tiêu",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: _expenseTabIndex == 0
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() => _expenseTabIndex = 1);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _expenseTabIndex == 1
+                                      ? const Color(0xFF5DBDD4)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: _expenseTabIndex == 1
+                                      ? null
+                                      : Border.all(
+                                          color: Colors.grey.shade300,
+                                          width: 1,
+                                        ),
+                                ),
+                                child: Text(
+                                  "Danh sách nợ",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: _expenseTabIndex == 1
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Tab content
+                        if (_expenseTabIndex == 0) ...[
+                          // Chi tiêu list
+                          _buildExpenseItemWithIcon(
+                            icon: "⭐",
+                            title: "Phần thưởng tháng 12",
+                            description: "A được nhận",
+                            date: "1/1/2026",
+                            amount: "100.000 đ",
+                            badge: "Xác nhận",
+                            badgeColor: const Color(0xFFB8D8D0),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildExpenseItemWithIcon(
+                            icon: "",
+                            title: "Phí phát tháng 12",
+                            description: "C bị phạt",
+                            date: "1/1/2026",
+                            amount: "100.000 đ",
+                            badge: "Thành toán",
+                            badgeColor: const Color(0xFFB8D8D0),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildExpenseItemWithIcon(
+                            icon: "",
+                            title: "Dị ăn lẩu cuối tháng",
+                            description: "A đã trả - Chia cho A, B, C",
+                            date: "27/11/2025",
+                            amount: "500.000 đ",
+                            badge: "Chia theo người thêm gia",
+                            badgeColor: const Color(0xFFB8D8D0),
+                            // isHighlight: true,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildExpenseItemWithIcon(
+                            icon: "",
+                            title: "Bánh sinh nhật",
+                            description: "B đã trả - Chia cho A, B, C, D",
+                            date: "27/11/2025",
+                            amount: "200.000 đ",
+                            badge: "Chia đều",
+                            badgeColor: const Color(0xFFB8D8D0),
+                          ),
+                        ] else if (_expenseTabIndex == 1) ...[
+                          // Danh sách nợ
+                          _buildDebtItem(
+                            name: "Tuấn đang nợ Long",
+                            amount: "100.000 đ",
+                          ),
+                          const SizedBox(height: 12),
+                          _buildDebtItem(
+                            name: "Long đang nợ Tuấn",
+                            amount: "200.000 đ",
+                          ),
+                          const SizedBox(height: 20),
+                          Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const DebtSummaryScreen(),
+                                  ),
+                                );
+                              },
+
+                              child: const Text(
+                                "Xem chi tiết ai nợ ai",
+                                style: TextStyle(
+                                  color: Color(0xFF5DBDD4),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+                ],
+              ),
             ),
           ),
         ),
