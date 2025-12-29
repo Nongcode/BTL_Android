@@ -27,6 +27,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
   List<CommonExpense> _expenses = [];
   bool _loading = false;
   String? _error;
+  int? _deletingId;
   late final FinanceService _service;
   final NumberFormat _fmt = NumberFormat.currency(
     locale: 'vi_VN',
@@ -75,6 +76,49 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       });
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _deleteExpense(CommonExpense e) async {
+    if (_deletingId != null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa chi tiêu quỹ?'),
+        content: Text('Bạn chắc chắn muốn xóa "${e.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _deletingId = e.id);
+    final ok = await _service.deleteCommonExpense(expenseId: e.id);
+
+    if (!mounted) return;
+    setState(() => _deletingId = null);
+
+    if (ok) {
+      setState(() {
+        _expenses = _expenses.where((x) => x.id != e.id).toList();
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Đã xóa chi tiêu quỹ')));
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Xóa thất bại, thử lại')));
     }
   }
 
@@ -414,13 +458,34 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  Text(
-                    _fmt.format(e.amount),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black87,
-                      fontSize: 14,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        _fmt.format(e.amount),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      (_deletingId == e.id)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.redAccent,
+                                size: 18,
+                              ),
+                              onPressed: () => _deleteExpense(e),
+                            ),
+                    ],
                   ),
                 ],
               ),
@@ -442,14 +507,21 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
   // ========================= BUTTON ADD SPENDING ==========================
   Widget _buildAddButton() {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final result = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (context) =>
                 AddExpenseScreen(summary: _summary, houseId: _service.houseId),
           ),
         );
+        if (result == true) {
+          await _loadData();
+          if (!mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Đã thêm chi tiêu quỹ')));
+        }
       },
       child: Center(
         child: Container(
