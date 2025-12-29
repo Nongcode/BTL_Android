@@ -118,6 +118,42 @@ class CommonExpense {
   }
 }
 
+class AdHocExpense {
+  final int id;
+  final String title;
+  final String? description;
+  final double totalAmount;
+  final String paidByName;
+  final int paidBy;
+  final DateTime expenseDate;
+
+  AdHocExpense({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.totalAmount,
+    required this.paidByName,
+    required this.paidBy,
+    required this.expenseDate,
+  });
+
+  factory AdHocExpense.fromJson(Map<String, dynamic> json) {
+    return AdHocExpense(
+      id: json['expense_id'] ?? json['id'] ?? 0,
+      title: json['title'] ?? '',
+      description: json['description'],
+      totalAmount: _toDouble(json['total_amount'] ?? json['amount']),
+      paidByName: json['paid_by_name'] ?? json['paidByName'] ?? '',
+      paidBy: json['paid_by'] ?? json['paidBy'] ?? 0,
+      expenseDate:
+          DateTime.tryParse(
+            (json['expense_date'] ?? json['expenseDate'] ?? '').toString(),
+          ) ??
+          DateTime.now(),
+    );
+  }
+}
+
 class Contribution {
   final int id;
   final int memberId;

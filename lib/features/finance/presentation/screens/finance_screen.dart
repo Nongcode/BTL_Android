@@ -23,6 +23,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
   final FinanceService _service = FinanceService(houseId: 1);
   FundSummary? _summary;
   List<CommonExpense> _commonExpenses = [];
+  List<AdHocExpense> _adHocExpenses = [];
   bool _loading = false;
   String? _error;
 
@@ -46,11 +47,13 @@ class _FinanceScreenState extends State<FinanceScreen> {
     });
     try {
       final summary = await _service.fetchFundSummary();
-      final expenses = await _service.fetchCommonExpenses();
+      final common = await _service.fetchCommonExpenses();
+      final adHoc = await _service.fetchAdHocExpenses();
       if (!mounted) return;
       setState(() {
         _summary = summary;
-        _commonExpenses = expenses;
+        _commonExpenses = common;
+        _adHocExpenses = adHoc;
         if (summary != null) {
           _contributionAmount =
               "${_currency.format(summary.contributionAmount)} /người";
@@ -66,6 +69,27 @@ class _FinanceScreenState extends State<FinanceScreen> {
       if (mounted) {
         setState(() => _loading = false);
       }
+    }
+  }
+
+  Future<void> _handleAddExpense() async {
+    final summary = _summary;
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddExpenseScreen(
+          initialType: 1, // chi tiêu phát sinh
+          summary: summary,
+          houseId: _service.houseId,
+        ),
+      ),
+    );
+    if (result == true) {
+      await _loadFinance();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã thêm chi tiêu phát sinh')),
+      );
     }
   }
 
@@ -510,18 +534,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
                               ),
                             ),
                             GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => AddExpenseScreen(
-                                      initialType: 1,
-                                      summary: summary,
-                                      houseId: _service.houseId,
-                                    ),
-                                  ),
-                                );
-                              },
+                              onTap: _handleAddExpense,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 14,
@@ -621,49 +634,31 @@ class _FinanceScreenState extends State<FinanceScreen> {
 
                         // Tab content
                         if (_expenseTabIndex == 0) ...[
-                          // Chi tiêu list
-                          _buildExpenseItemWithIcon(
-                            icon: "⭐",
-                            title: "Phần thưởng tháng 12",
-                            description: "A được nhận",
-                            date: "1/1/2026",
-                            amount: "100.000 đ",
-                            badge: "Xác nhận",
-                            badgeColor: const Color(0xFFB8D8D0),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildExpenseItemWithIcon(
-                            icon: "",
-                            title: "Phí phát tháng 12",
-                            description: "C bị phạt",
-                            date: "1/1/2026",
-                            amount: "100.000 đ",
-                            badge: "Thành toán",
-                            badgeColor: const Color(0xFFB8D8D0),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildExpenseItemWithIcon(
-                            icon: "",
-                            title: "Dị ăn lẩu cuối tháng",
-                            description: "A đã trả - Chia cho A, B, C",
-                            date: "27/11/2025",
-                            amount: "500.000 đ",
-                            badge: "Chia theo người thêm gia",
-                            badgeColor: const Color(0xFFB8D8D0),
-                            // isHighlight: true,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildExpenseItemWithIcon(
-                            icon: "",
-                            title: "Bánh sinh nhật",
-                            description: "B đã trả - Chia cho A, B, C, D",
-                            date: "27/11/2025",
-                            amount: "200.000 đ",
-                            badge: "Chia đều",
-                            badgeColor: const Color(0xFFB8D8D0),
-                          ),
+                          if (_adHocExpenses.isEmpty)
+                            const Text(
+                              "Chưa có chi tiêu phát sinh",
+                              style: TextStyle(color: Colors.grey),
+                            )
+                          else
+                            ..._adHocExpenses.map(
+                              (e) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _buildExpenseItemWithIcon(
+                                  icon: "💸",
+                                  title: e.title,
+                                  description: e.description ?? '',
+                                  date:
+                                      "${e.expenseDate.day}/${e.expenseDate.month}/${e.expenseDate.year}",
+                                  amount: _fmt(e.totalAmount),
+                                  badge: e.paidByName.isNotEmpty
+                                      ? "${e.paidByName} đã trả"
+                                      : "Đã chi",
+                                  badgeColor: const Color(0xFF5DBDD4),
+                                  trailing: null,
+                                ),
+                              ),
+                            ),
                         ] else if (_expenseTabIndex == 1) ...[
-                          // Danh sách nợ
                           _buildDebtItem(
                             name: "Tuấn đang nợ Long",
                             amount: "100.000 đ",
@@ -719,6 +714,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
     required String badge,
     required Color badgeColor,
     bool isHighlight = false,
+    Widget? trailing,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -805,6 +801,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
                   ),
                 ],
               ),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing],
             ],
           ),
           if (isHighlight) ...[

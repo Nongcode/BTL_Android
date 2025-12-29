@@ -77,6 +77,31 @@ class FinanceService {
     }
   }
 
+  Future<List<AdHocExpense>> fetchAdHocExpenses({int? month, int? year}) async {
+    try {
+      final uri = _withQuery(
+        ApiUrls.adHocExpenses(houseId),
+        month: month,
+        year: year,
+      );
+      final res = await http.get(uri, headers: _headers);
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          final List<dynamic> data = body['data'] ?? [];
+          return data.map((item) => AdHocExpense.fromJson(item)).toList();
+        }
+      }
+      // ignore: avoid_print
+      print('adHocExpenses error ${res.statusCode}: ${res.body}');
+      return [];
+    } catch (e) {
+      // ignore: avoid_print
+      print('adHocExpenses exception: $e');
+      return [];
+    }
+  }
+
   Future<List<Contribution>> fetchContributions({int? month, int? year}) async {
     try {
       final uri = _withQuery(
@@ -167,6 +192,12 @@ class FinanceService {
       headers: _headers,
       body: jsonEncode(payload),
     );
+    return res.statusCode == 200;
+  }
+
+  Future<bool> deleteCommonExpense({required int expenseId}) async {
+    final uri = Uri.parse('${ApiUrls.commonExpenses(houseId)}/$expenseId');
+    final res = await http.delete(uri, headers: _headers);
     return res.statusCode == 200;
   }
 
