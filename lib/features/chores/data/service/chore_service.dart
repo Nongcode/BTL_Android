@@ -102,4 +102,83 @@ class ChoreService {
       return false;
     }
   }
+
+  // 6. Thống kê tiến độ hôm nay (GET)
+  Future<List<Map<String, dynamic>>> getTodayStats() async {
+    try {
+      final url = '${ApiUrls.chores}/stats/today';
+      
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        // Backend trả về trực tiếp một mảng JSON: [{...}, {...}]
+        final List<dynamic> data = jsonDecode(response.body);
+        
+        // Ép kiểu sang List<Map> để code UI gợi ý code tốt hơn
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        print("Lỗi tải thống kê: ${response.statusCode} - ${response.body}");
+        return []; // Trả về rỗng nếu lỗi
+      }
+    } catch (e) {
+      print('Error getTodayStats: $e');
+      return []; // Trả về rỗng để UI không bị crash
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTopLeaderboard() async {
+    try {
+      final url = '${ApiUrls.chores}/leaderboard/top'; // URL: .../api/chores/leaderboard/top
+      
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Error getTopLeaderboard: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMonthlyLeaderboard(int month, int year) async {
+    try {
+      // URL ví dụ: .../api/chores/leaderboard/monthly?month=12&year=2025
+      final url = '${ApiUrls.chores}/leaderboard/monthly?month=$month&year=$year';
+      
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Error getMonthlyLeaderboard: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getScoreHistory(String username, int month, int year) async {
+    try {
+      // URL ví dụ: .../api/chores/scores/history?username=Long&month=12&year=2025
+      final url = '${ApiUrls.chores}/scores/history?username=$username&month=$month&year=$year';
+      
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Error getScoreHistory: $e');
+      return [];
+    }
+  }
 }
