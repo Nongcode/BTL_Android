@@ -15,14 +15,6 @@ class HomeHeader extends StatelessWidget {
         decoration: const BoxDecoration(
 
           color: AppColors.primary,
-          // gradient: LinearGradient(
-          //   begin: Alignment.topLeft,
-          //   end: Alignment.bottomRight,
-          //   colors: [
-          //     Color(0xFF80E0FF), // Màu nhạt hơn chút ở góc (giống hiệu ứng ánh sáng)
-          //     AppColors.primary, // Màu chính
-          //   ],
-          // ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
