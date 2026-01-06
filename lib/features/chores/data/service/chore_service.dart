@@ -181,4 +181,19 @@ class ChoreService {
       return [];
     }
   }
+
+  Future<Map<String, dynamic>?> getMyScoreStats() async {
+    try {
+      final url = '${ApiUrls.chores}/scores/my-stats';
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('Error getMyScoreStats: $e');
+      return null;
+    }
+  }
 }

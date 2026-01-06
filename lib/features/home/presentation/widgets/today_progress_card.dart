@@ -8,10 +8,10 @@ class TodayProgressCard extends StatefulWidget {
   const TodayProgressCard({super.key, this.onPressed});
 
   @override
-  State<TodayProgressCard> createState() => _TodayProgressCardState();
+  State<TodayProgressCard> createState() => TodayProgressCardState();
 }
 
-class _TodayProgressCardState extends State<TodayProgressCard> {
+class TodayProgressCardState extends State<TodayProgressCard> {
   final ChoreService _choreService = ChoreService();
   
   // Biến lưu dữ liệu thống kê
@@ -21,15 +21,20 @@ class _TodayProgressCardState extends State<TodayProgressCard> {
   @override
   void initState() {
     super.initState();
-    _fetchStats();
+    refreshData();
   }
 
-  // Hàm gọi API
-  Future<void> _fetchStats() async {
+  Future<void> refreshData() async {
+    // Nếu widget chưa được build xong hoặc đã bị hủy thì dừng
+    if (!mounted) return;
+
+    // Chỉ hiện loading nếu danh sách đang trống (để tránh nháy màn hình khi update ngầm)
+    if (_statsList.isEmpty) {
+        setState(() => _isLoading = true);
+    }
+
     try {
-      // Giả sử bạn đã thêm hàm getTodayStats vào ChoreService
-      // Nếu chưa, hãy xem phần ghi chú bên dưới code này
-      final data = await _choreService.getTodayStats(); 
+      final data = await _choreService.getTodayStats();
       if (mounted) {
         setState(() {
           _statsList = List<Map<String, dynamic>>.from(data);
