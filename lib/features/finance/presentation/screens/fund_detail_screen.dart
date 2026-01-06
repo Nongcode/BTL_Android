@@ -28,6 +28,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
   bool _loading = false;
   String? _error;
   int? _deletingId;
+  bool _changed = false;
   late final FinanceService _service;
   final NumberFormat _fmt = NumberFormat.currency(
     locale: 'vi_VN',
@@ -111,7 +112,9 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
     if (ok) {
       setState(() {
         _expenses = _expenses.where((x) => x.id != e.id).toList();
+        _changed = true;
       });
+      await _loadData();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Đã xóa chi tiêu quỹ')));
@@ -124,63 +127,69 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildHeader(),
-          _buildMonthSelector(), // <-- TAB CHUẨN FIGMA
-          // --- CONTENT ---
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadData,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_loading)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: 12),
-                          child: CircularProgressIndicator(),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pop(context, _changed);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
+            _buildHeader(),
+            _buildMonthSelector(), // <-- TAB CHUẨN FIGMA
+            // --- CONTENT ---
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _loadData,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_loading)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: CircularProgressIndicator(),
+                          ),
                         ),
-                      ),
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(color: Colors.red),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
                         ),
-                      ),
-                    _sectionTitle("Tổng quỹ"),
-                    const SizedBox(height: 12),
-                    _buildSummaryCardFigma(),
+                      _sectionTitle("Tổng quỹ"),
+                      const SizedBox(height: 12),
+                      _buildSummaryCardFigma(),
 
-                    const SizedBox(height: 28),
-                    _sectionTitle("Trạng thái thành viên"),
-                    const SizedBox(height: 12),
-                    _buildMemberStatusFigma(),
+                      const SizedBox(height: 28),
+                      _sectionTitle("Trạng thái thành viên"),
+                      const SizedBox(height: 12),
+                      _buildMemberStatusFigma(),
 
-                    const SizedBox(height: 28),
-                    _sectionTitle("Chi tiêu từ quỹ"),
-                    const SizedBox(height: 12),
-                    _buildExpenseListFigma(),
+                      const SizedBox(height: 28),
+                      _sectionTitle("Chi tiêu từ quỹ"),
+                      const SizedBox(height: 12),
+                      _buildExpenseListFigma(),
 
-                    const SizedBox(height: 20),
-                    _buildAddButton(),
-                    const SizedBox(height: 24),
-                  ],
+                      const SizedBox(height: 20),
+                      _buildAddButton(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -202,7 +211,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.pop(context, _changed),
                 child: const Icon(Icons.arrow_back, color: Colors.white),
               ),
               const SizedBox(width: 12),
@@ -516,6 +525,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
           ),
         );
         if (result == true) {
+          _changed = true;
           await _loadData();
           if (!mounted) return;
           ScaffoldMessenger.of(

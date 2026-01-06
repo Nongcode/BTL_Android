@@ -102,6 +102,41 @@ class FinanceService {
     }
   }
 
+  Future<bool> updateAdHocExpense({
+    required int expenseId,
+    required int paidBy,
+    required String title,
+    String? description,
+    required double totalAmount,
+    required DateTime expenseDate,
+    String splitMethod = 'equal',
+    List<Map<String, dynamic>> splits = const [],
+  }) async {
+    final uri = Uri.parse('${ApiUrls.adHocExpenses(houseId)}/$expenseId');
+    final payload = {
+      'paidBy': paidBy,
+      'title': title,
+      if (description != null && description.isNotEmpty)
+        'description': description,
+      'totalAmount': totalAmount,
+      'expenseDate': expenseDate.toIso8601String(),
+      'splitMethod': splitMethod,
+      'splits': splits,
+    };
+    final res = await http.put(
+      uri,
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    return res.statusCode == 200;
+  }
+
+  Future<bool> deleteAdHocExpense({required int expenseId}) async {
+    final uri = Uri.parse('${ApiUrls.adHocExpenses(houseId)}/$expenseId');
+    final res = await http.delete(uri, headers: _headers);
+    return res.statusCode == 200;
+  }
+
   Future<List<Contribution>> fetchContributions({int? month, int? year}) async {
     try {
       final uri = _withQuery(

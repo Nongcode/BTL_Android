@@ -6,12 +6,16 @@ class AddExpenseScreen extends StatefulWidget {
   final int initialType; // 0 = Chi từ quỹ, 1 = Chi phát sinh
   final FundSummary? summary;
   final int houseId;
+  final AdHocExpense? adHocExpense;
+  final bool viewOnly;
 
   const AddExpenseScreen({
     Key? key,
     this.initialType = 0,
     this.summary,
     this.houseId = 1,
+    this.adHocExpense,
+    this.viewOnly = false,
   }) : super(key: key);
 
   @override
@@ -20,7 +24,7 @@ class AddExpenseScreen extends StatefulWidget {
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
   late int _selectedType; // 0 = Chi từ quỹ, 1 = Chi phát sinh
-  int _selectedSplit = 0; // 0=đều, 1=tỷ lệ, 2=tham gia
+  int _selectedSplit = 0; // 0=đều, 1=theo từng người
 
   DateTime _selectedDate = DateTime.now();
   final TextEditingController _title = TextEditingController();
@@ -29,6 +33,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   int? _selectedMemberId;
   bool _submitting = false;
   late final FinanceService _service;
+  // controllers cho chia custom theo người
+  final List<TextEditingController> _amountCtrls = [];
+  bool get _isEditingAdHoc => widget.adHocExpense != null && _selectedType == 1;
+  bool get _isViewOnly => widget.viewOnly;
 
   @override
   void initState() {
@@ -41,6 +49,55 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     } else {
       _loadMembers();
     }
+
+    if (widget.adHocExpense != null) {
+      final a = widget.adHocExpense!;
+      _selectedType = 1;
+      _title.text = a.title;
+      _amount.text = a.totalAmount.toStringAsFixed(0);
+      _selectedDate = a.expenseDate;
+      _selectedMemberId = a.paidBy;
+      // map split method string to index (only equal/custom)
+      _selectedSplit = a.splitMethod == 'custom' ? 1 : 0;
+    }
+
+    _initSplitInputsFromMembers();
+    _prefillSplitFromExpense();
+    _enforcePayerZeroInCustom();
+  }
+
+  void _initSplitInputsFromMembers() {
+    _amountCtrls.clear();
+    for (final _ in _members) {
+      _amountCtrls.add(TextEditingController(text: ''));
+    }
+  }
+
+  void _prefillSplitFromExpense() {
+    final ad = widget.adHocExpense;
+    if (ad == null) return;
+    for (int i = 0; i < _members.length; i++) {
+      final m = _members[i];
+      final split = ad.splits.firstWhere(
+        (s) => s.memberId == m.memberId,
+        orElse: () => AdHocSplit(
+          memberId: m.memberId,
+          memberName: m.memberName,
+          amountOwed: 0,
+          sharePercentage: 0,
+        ),
+      );
+      _amountCtrls[i].text = split.amountOwed.toStringAsFixed(0);
+    }
+  }
+
+  void _enforcePayerZeroInCustom() {
+    if (_selectedMemberId == null || _selectedSplit != 1) return;
+    for (int i = 0; i < _members.length; i++) {
+      if (_members[i].memberId == _selectedMemberId) {
+        _amountCtrls[i].text = '0';
+      }
+    }
   }
 
   Future<void> _loadMembers() async {
@@ -51,6 +108,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       if (_members.isNotEmpty) {
         _selectedMemberId = _members.first.memberId;
       }
+      _initSplitInputsFromMembers();
+      _prefillSplitFromExpense();
+      _enforcePayerZeroInCustom();
     });
   }
 
@@ -88,7 +148,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         expenseDate: _selectedDate,
       );
     } else {
-      // Chia đều cho tất cả thành viên hiện có nếu chưa chọn cấu hình khác.
       final members = _members.isNotEmpty
           ? _members
           : [
@@ -101,30 +160,84 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 note: null,
               ),
             ];
-      final equalShare = amount / (members.isNotEmpty ? members.length : 1);
-      final sharePercent = 100 / (members.isNotEmpty ? members.length : 1);
-      final splits = members
-          .map(
-            (m) => {
-              'memberId': m.memberId,
-              'sharePercentage': double.parse(sharePercent.toStringAsFixed(2)),
-              'amountOwed': double.parse(equalShare.toStringAsFixed(2)),
-            },
-          )
-          .toList();
-      ok = await _service.addAdHocExpense(
-        paidBy: _selectedMemberId!,
-        title: title,
-        description: null,
-        totalAmount: amount,
-        expenseDate: _selectedDate,
-        splitMethod: _selectedSplit == 0
-            ? 'equal'
-            : _selectedSplit == 1
-            ? 'ratio'
-            : 'custom',
-        splits: splits,
-      );
+
+      List<Map<String, dynamic>> splits;
+
+      if (_selectedSplit == 0) {
+        final participants = members
+            .where((m) => m.memberId != _selectedMemberId)
+            .toList();
+        if (participants.isEmpty) {
+          if (!mounted) return;
+          setState(() => _submitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cần ít nhất một người khác để chia đều'),
+            ),
+          );
+          return;
+        }
+        final equalShare = amount / participants.length;
+        final sharePercent = 100 / participants.length;
+        splits = members.map((m) {
+          final isPayer = m.memberId == _selectedMemberId;
+          final owed = isPayer ? 0 : equalShare;
+          final pct = isPayer ? 0 : sharePercent;
+          return {
+            'memberId': m.memberId,
+            'sharePercentage': double.parse(pct.toStringAsFixed(2)),
+            'amountOwed': double.parse(owed.toStringAsFixed(2)),
+          };
+        }).toList();
+      } else {
+        // Theo từng người: nhập amountOwed trực tiếp, validate tổng = amount.
+        double totalAmount = 0;
+        splits = [];
+        while (_amountCtrls.length < members.length) {
+          _amountCtrls.add(TextEditingController(text: '0'));
+        }
+        for (int i = 0; i < members.length; i++) {
+          final isPayer = members[i].memberId == _selectedMemberId;
+          final owed = isPayer ? 0 : double.tryParse(_amountCtrls[i].text) ?? 0;
+          totalAmount += owed;
+          final pct = amount == 0 ? 0 : (owed / amount) * 100;
+          splits.add({
+            'memberId': members[i].memberId,
+            'sharePercentage': double.parse(pct.toStringAsFixed(2)),
+            'amountOwed': double.parse(owed.toStringAsFixed(2)),
+          });
+        }
+        if ((totalAmount - amount).abs() > 0.01) {
+          if (!mounted) return;
+          setState(() => _submitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tổng tiền chia phải bằng số tiền')),
+          );
+          return;
+        }
+      }
+      if (_isEditingAdHoc && widget.adHocExpense != null) {
+        ok = await _service.updateAdHocExpense(
+          expenseId: widget.adHocExpense!.id,
+          paidBy: _selectedMemberId!,
+          title: title,
+          description: null,
+          totalAmount: amount,
+          expenseDate: _selectedDate,
+          splitMethod: _selectedSplit == 0 ? 'equal' : 'custom',
+          splits: splits,
+        );
+      } else {
+        ok = await _service.addAdHocExpense(
+          paidBy: _selectedMemberId!,
+          title: title,
+          description: null,
+          totalAmount: amount,
+          expenseDate: _selectedDate,
+          splitMethod: _selectedSplit == 0 ? 'equal' : 'custom',
+          splits: splits,
+        );
+      }
     }
 
     if (!mounted) return;
@@ -168,8 +281,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   if (_selectedType == 1) _buildSplitMethod(),
 
                   const SizedBox(height: 30),
-                  _buildMainButton(),
-                  const SizedBox(height: 14),
+                  if (!_isViewOnly) _buildMainButton(),
+                  if (!_isViewOnly) const SizedBox(height: 14),
                   _buildCancelButton(),
                 ],
               ),
@@ -199,9 +312,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               child: const Icon(Icons.arrow_back, color: Colors.white),
             ),
             const SizedBox(width: 12),
-            const Text(
-              "Thêm chi tiêu mới",
-              style: TextStyle(
+            Text(
+              _isViewOnly ? "Xem chi tiêu phát sinh" : "Thêm chi tiêu mới",
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -254,7 +367,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final isActive = _selectedType == index;
 
     return GestureDetector(
-      onTap: () => setState(() => _selectedType = index),
+      onTap: _isViewOnly ? null : () => setState(() => _selectedType = index),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -357,6 +470,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         TextField(
           controller: controller,
           keyboardType: type,
+          readOnly: _isViewOnly,
           decoration: InputDecoration(
             hintText: hint,
             filled: true,
@@ -414,7 +528,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   ),
                 )
                 .toList(),
-            onChanged: (value) => setState(() => _selectedMemberId = value),
+            onChanged: _isViewOnly
+                ? null
+                : (value) => setState(() {
+                    _selectedMemberId = value;
+                    _enforcePayerZeroInCustom();
+                  }),
           ),
         ),
       ],
@@ -432,15 +551,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         const SizedBox(height: 6),
 
         GestureDetector(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: _selectedDate,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) setState(() => _selectedDate = picked);
-          },
+          onTap: _isViewOnly
+              ? null
+              : () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) setState(() => _selectedDate = picked);
+                },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
@@ -480,11 +601,74 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             _buildSplitButton("Chia đều", 0, Icons.grid_view),
             const SizedBox(width: 8),
-            _buildSplitButton("Theo tỷ lệ", 1, Icons.pie_chart),
-            const SizedBox(width: 8),
-            _buildSplitButton("Theo từng người", 2, Icons.group),
+            _buildSplitButton("Theo từng người", 1, Icons.group),
           ],
         ),
+
+        const SizedBox(height: 8),
+        const Text(
+          'Người trả không bị tính phần nợ.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+
+        const SizedBox(height: 12),
+        if (_selectedSplit == 1) _buildCustomAmountInputs(),
+      ],
+    );
+  }
+
+  Widget _buildCustomAmountInputs() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Nhập số tiền từng người chịu (tổng = số tiền chi)",
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        ...List.generate(_members.length, (i) {
+          final m = _members[i];
+          final isPayer = m.memberId == _selectedMemberId;
+          if (isPayer &&
+              (_amountCtrls[i].text.isEmpty || _amountCtrls[i].text != '0')) {
+            _amountCtrls[i].text = '0';
+          }
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    m.memberName.isNotEmpty
+                        ? m.memberName
+                        : 'Thành viên ${m.memberId}',
+                  ),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: TextField(
+                    controller: _amountCtrls[i],
+                    keyboardType: TextInputType.number,
+                    readOnly: _isViewOnly || isPayer,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      suffixText: isPayer ? '' : 'đ',
+                      hintText: isPayer
+                          ? 'Người trả không chịu'
+                          : (_isViewOnly ? null : null),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
       ],
     );
   }
@@ -494,7 +678,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedSplit = index),
+        onTap: _isViewOnly
+            ? null
+            : () => setState(() {
+                _selectedSplit = index;
+                _enforcePayerZeroInCustom();
+              }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -565,9 +754,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     return Center(
       child: TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text(
-          "Huỷ",
-          style: TextStyle(
+        child: Text(
+          _isViewOnly ? "Quay lại" : "Huỷ",
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: Colors.black87,

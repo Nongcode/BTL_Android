@@ -24,6 +24,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
   FundSummary? _summary;
   List<CommonExpense> _commonExpenses = [];
   List<AdHocExpense> _adHocExpenses = [];
+  int? _deletingAdHocId;
   bool _loading = false;
   String? _error;
 
@@ -90,6 +91,71 @@ class _FinanceScreenState extends State<FinanceScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Đã thêm chi tiêu phát sinh')),
       );
+    }
+  }
+
+  Future<void> _handleEditAdHoc(AdHocExpense expense) async {
+    final summary = _summary;
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddExpenseScreen(
+          initialType: 1,
+          summary: summary,
+          houseId: _service.houseId,
+          adHocExpense: expense,
+          viewOnly: true,
+        ),
+      ),
+    );
+    if (result == true) {
+      await _loadFinance();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã cập nhật chi tiêu phát sinh')),
+      );
+    }
+  }
+
+  Future<void> _handleDeleteAdHoc(AdHocExpense expense) async {
+    if (_deletingAdHocId != null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa chi tiêu phát sinh?'),
+        content: Text('Bạn chắc chắn muốn xóa "${expense.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _deletingAdHocId = expense.id);
+    final ok = await _service.deleteAdHocExpense(expenseId: expense.id);
+
+    if (!mounted) return;
+    setState(() => _deletingAdHocId = null);
+
+    if (ok) {
+      await _loadFinance();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã xóa chi tiêu phát sinh')),
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Xóa thất bại, thử lại')));
     }
   }
 
@@ -440,7 +506,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
 
                         // Số dự hiện tại
                         _buildQuotaRow(
-                          "Số dự hiện tại:",
+                          "Số dư hiện tại:",
                           summary != null ? _fmt(summary.currentBalance) : "…",
                           color: const Color(0xFF5DBDD4),
                         ),
@@ -475,8 +541,8 @@ class _FinanceScreenState extends State<FinanceScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
+                            onPressed: () async {
+                              final changed = await Navigator.push<bool>(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => FundDetailScreen(
@@ -486,6 +552,9 @@ class _FinanceScreenState extends State<FinanceScreen> {
                                   ),
                                 ),
                               );
+                              if (changed == true) {
+                                await _loadFinance();
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF5DBDD4),
@@ -643,18 +712,37 @@ class _FinanceScreenState extends State<FinanceScreen> {
                             ..._adHocExpenses.map(
                               (e) => Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
-                                child: _buildExpenseItemWithIcon(
-                                  icon: "💸",
-                                  title: e.title,
-                                  description: e.description ?? '',
-                                  date:
-                                      "${e.expenseDate.day}/${e.expenseDate.month}/${e.expenseDate.year}",
-                                  amount: _fmt(e.totalAmount),
-                                  badge: e.paidByName.isNotEmpty
-                                      ? "${e.paidByName} đã trả"
-                                      : "Đã chi",
-                                  badgeColor: const Color(0xFF5DBDD4),
-                                  trailing: null,
+                                child: GestureDetector(
+                                  onTap: () => _handleEditAdHoc(e),
+                                  child: _buildExpenseItemWithIcon(
+                                    icon: "💸",
+                                    title: e.title,
+                                    description: e.description ?? '',
+                                    date:
+                                        "${e.expenseDate.day}/${e.expenseDate.month}/${e.expenseDate.year}",
+                                    amount: _fmt(e.totalAmount),
+                                    badge: e.paidByName.isNotEmpty
+                                        ? "${e.paidByName} đã trả"
+                                        : "Đã chi",
+                                    badgeColor: const Color(0xFF5DBDD4),
+                                    trailing: (_deletingAdHocId == e.id)
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.redAccent,
+                                              size: 18,
+                                            ),
+                                            onPressed: () =>
+                                                _handleDeleteAdHoc(e),
+                                          ),
+                                  ),
                                 ),
                               ),
                             ),
