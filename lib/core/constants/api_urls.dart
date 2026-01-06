@@ -1,9 +1,14 @@
 // lib/core/constants/api_urls.dart
 import 'package:flutter/foundation.dart';
 
+// Cho phép override base URL khi build (ví dụ chạy trên thiết bị thật):
+// flutter run --dart-define=API_BASE_URL=http://192.168.1.10:4000/api
+const String _overrideBaseUrl = String.fromEnvironment('API_BASE_URL');
+
 class ApiUrls {
   /// Base: http://<host>:4000/api
   static String get baseUrl {
+    if (_overrideBaseUrl.isNotEmpty) return _overrideBaseUrl;
     if (kIsWeb) {
       return 'http://localhost:4000/api';
     } else if (defaultTargetPlatform == TargetPlatform.android) {
@@ -80,9 +85,7 @@ class ApiUrls {
     int houseId,
     String targetType,
     String targetId,
-  ) =>
-      '$bulletinBase/houses/$houseId/comments/$targetType/$targetId';
+  ) => '$bulletinBase/houses/$houseId/comments/$targetType/$targetId';
 
-  static String bulletinCommentById(String id) =>
-      '$bulletinBase/comments/$id';
+  static String bulletinCommentById(String id) => '$bulletinBase/comments/$id';
 }

@@ -1,10 +1,52 @@
 import 'package:flutter/material.dart';
 
-import 'confirm_payment_screen.dart';
-import 'paid_payment_screen.dart';
+import '../../data/models/finance_model.dart';
+import '../../data/service/finance_service.dart';
 
-class DebtSummaryScreen extends StatelessWidget {
+class DebtSummaryScreen extends StatefulWidget {
   const DebtSummaryScreen({super.key});
+
+  @override
+  State<DebtSummaryScreen> createState() => _DebtSummaryScreenState();
+}
+
+class _DebtSummaryScreenState extends State<DebtSummaryScreen> {
+  final FinanceService _service = FinanceService(houseId: 1);
+  List<DebtPair> _pairs = [];
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSummary();
+  }
+
+  Future<void> _loadSummary() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await _service.fetchDebtSummary();
+      if (!mounted) return;
+      setState(() {
+        _pairs = list;
+        if (list.isEmpty) {
+          _error = 'Chưa có dữ liệu nợ';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Không tải được danh sách nợ';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,61 +59,75 @@ class DebtSummaryScreen extends StatelessWidget {
             _buildHeader(context),
 
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Dựa trên tất cả chi tiêu, đây là số tiền mỗi người đang nợ",
-                      style: TextStyle(fontSize: 13, color: Colors.black87),
-                    ),
-                    const SizedBox(height: 14),
-
-                    _buildOverviewRow(),
-
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Danh sách cặp nợ",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                        color: Colors.black87,
+              child: RefreshIndicator(
+                onRefresh: _loadSummary,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Dựa trên tất cả chi tiêu, đây là số tiền mỗi người đang nợ",
+                        style: TextStyle(fontSize: 13, color: Colors.black87),
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 14),
 
-                    _buildDebtCard(
-                      context,
-                      name: "Lan đang nợ Minh",
-                      amount: "100.000 đ",
-                      color: const Color(0xFFB8E0F8),
-                      showPayButton: true,
-                    ),
+                      if (_loading)
+                        const Center(child: CircularProgressIndicator())
+                      else if (_error != null)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                            const SizedBox(height: 6),
+                            if (FinanceService.lastDebtSummaryDebug != null)
+                              Text(
+                                FinanceService.lastDebtSummaryDebug!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                          ],
+                        )
+                      else ...[
+                        _buildOverviewRow(),
 
-                    const SizedBox(height: 12),
-                    _buildDebtCard(
-                      context,
-                      name: "Hà đang nợ Minh",
-                      amount: "200.000 đ",
-                      color: const Color(0xFFFCE1C6),
-                      showPayButton: true,
-                    ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          "Danh sách cặp nợ",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
 
-                    const SizedBox(height: 12),
-                    _buildDebtCard(
-                      context,
-                      name: "Yến đang nợ Minh",
-                      amount: "300.000 đ",
-                      color: const Color(0xFFE0F8E0),
-                      showPayButton: false,
-                      confirmLabel: "Đã thanh toán",
-                      confirmColor: const Color(0xFF39C16C),
-                    ),
+                        ..._pairs.map(
+                          (p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildDebtCard(
+                              context,
+                              name:
+                                  "${p.debtor.memberName} đang nợ ${p.creditor.memberName}",
+                              amount:
+                                  "${p.remainingAmount.toStringAsFixed(0)} đ",
+                              color: const Color(0xFFB8E0F8),
+                              showPayButton: false,
+                            ),
+                          ),
+                        ),
 
-                    const SizedBox(height: 30),
-                    _suggestionBox(),
-                  ],
+                        const SizedBox(height: 30),
+                        _suggestionBox(),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -114,13 +170,19 @@ class DebtSummaryScreen extends StatelessWidget {
 
   // ======================= OVERVIEW CARD =======================
   Widget _buildOverviewRow() {
+    final top = _pairs.take(3).toList();
+    if (top.isEmpty) return const SizedBox.shrink();
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _buildSmallStat("Long", "-100.000 đ", "Đang nợ"),
-        _buildSmallStat("Tuấn", "-100.000 đ", "Đang nợ"),
-        _buildSmallStat("Minh", "-100.000 đ", "Đang nợ"),
-      ],
+      children: top
+          .map(
+            (p) => _buildSmallStat(
+              p.debtor.memberName,
+              '-${p.remainingAmount.toStringAsFixed(0)} đ',
+              'Đang nợ ${p.creditor.memberName}',
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -180,10 +242,13 @@ class DebtSummaryScreen extends StatelessWidget {
   }) {
     // TÁCH NGƯỜI NỢ – NGƯỜI ĐƯỢC TRẢ TỪ CHUỖI "Lan đang nợ Minh"
     final parts = name.split(" đang nợ ");
+    if (parts.length < 2) {
+      return const SizedBox.shrink();
+    }
     final from = parts[0]; // người nợ
     final to = parts[1]; // người được trả
 
-    final intAmount = int.parse(amount.replaceAll(RegExp(r'[^0-9]'), ""));
+    final intAmount = int.tryParse(amount.replaceAll(RegExp(r'[^0-9]'), ""));
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -228,41 +293,8 @@ class DebtSummaryScreen extends StatelessWidget {
             ),
           ),
 
-          // ===== BUTTON =====
-          GestureDetector(
-            onTap: () {
-              // Nếu là nút “Đã thanh toán” → mở màn hình xem thông tin
-              if (confirmLabel == "Đã thanh toán") {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PaidPaymentScreen(
-                      from: from,
-                      to: to,
-                      amount: intAmount,
-                      date: DateTime.now(),
-                      note: "",
-                    ),
-                  ),
-                );
-                return;
-              }
-
-              // Nếu là nút “Xác nhận thanh toán” → mở màn hình xác nhận
-              if (confirmLabel == "Xác nhận thanh toán") {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ConfirmPaymentScreen(
-                      from: from,
-                      to: to,
-                      amount: intAmount,
-                    ),
-                  ),
-                );
-              }
-            },
-            child: Container(
+          if (showPayButton)
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: confirmColor,
@@ -277,7 +309,6 @@ class DebtSummaryScreen extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

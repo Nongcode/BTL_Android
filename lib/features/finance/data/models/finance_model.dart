@@ -221,3 +221,134 @@ class Contribution {
     );
   }
 }
+
+class DebtMemberRef {
+  final int memberId;
+  final String memberName;
+
+  DebtMemberRef({required this.memberId, required this.memberName});
+
+  factory DebtMemberRef.fromJson(Map<String, dynamic> json) {
+    return DebtMemberRef(
+      memberId: json['memberId'] ?? json['member_id'] ?? 0,
+      memberName: json['memberName'] ?? json['member_name'] ?? '',
+    );
+  }
+}
+
+class DebtPair {
+  final DebtMemberRef debtor;
+  final DebtMemberRef creditor;
+  final double totalOwed;
+  final double paidAmount;
+  final double remainingAmount;
+  final String status;
+
+  DebtPair({
+    required this.debtor,
+    required this.creditor,
+    required this.totalOwed,
+    required this.paidAmount,
+    required this.remainingAmount,
+    required this.status,
+  });
+
+  factory DebtPair.fromJson(Map<String, dynamic> json) {
+    return DebtPair(
+      debtor: DebtMemberRef.fromJson(json['debtor'] ?? {}),
+      creditor: DebtMemberRef.fromJson(json['creditor'] ?? {}),
+      totalOwed: _toDouble(json['totalOwed']),
+      paidAmount: _toDouble(json['paidAmount']),
+      remainingAmount: _toDouble(json['remainingAmount']),
+      status: json['status'] ?? 'pending',
+    );
+  }
+}
+
+class DebtItem {
+  final int debtId;
+  final int creditorId;
+  final String creditorName;
+  final int expenseId;
+  final double originalAmount;
+  final double remainingAmount;
+  final String status;
+  final String fromExpense;
+  final DateTime createdAt;
+
+  DebtItem({
+    required this.debtId,
+    required this.creditorId,
+    required this.creditorName,
+    required this.expenseId,
+    required this.originalAmount,
+    required this.remainingAmount,
+    required this.status,
+    required this.fromExpense,
+    required this.createdAt,
+  });
+
+  factory DebtItem.fromJson(Map<String, dynamic> json) {
+    int _parseInt(dynamic v) {
+      if (v is int) return v;
+      return int.tryParse(v?.toString() ?? '') ?? 0;
+    }
+
+    return DebtItem(
+      debtId: json['debtId'] ?? json['debt_id'] ?? 0,
+      creditorId: json['creditorId'] ?? json['creditor_id'] ?? 0,
+      creditorName: json['creditorName'] ?? json['creditor_name'] ?? '',
+      expenseId: _parseInt(json['expenseId'] ?? json['expense_id']),
+      originalAmount: _toDouble(
+        json['originalAmount'] ?? json['original_amount'],
+      ),
+      remainingAmount: _toDouble(
+        json['remainingAmount'] ?? json['remaining_amount'],
+      ),
+      status: json['status'] ?? 'pending',
+      fromExpense: json['fromExpense'] ?? '',
+      createdAt:
+          DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
+          DateTime.now(),
+    );
+  }
+}
+
+class DebtPayment {
+  final int paymentId;
+  final int debtId;
+  final double amountPaid;
+  final DateTime paymentDate;
+  final String paymentMethod;
+  final bool confirmed;
+  final String? confirmedBy;
+  final DateTime? confirmedAt;
+
+  DebtPayment({
+    required this.paymentId,
+    required this.debtId,
+    required this.amountPaid,
+    required this.paymentDate,
+    required this.paymentMethod,
+    required this.confirmed,
+    this.confirmedBy,
+    this.confirmedAt,
+  });
+
+  factory DebtPayment.fromJson(Map<String, dynamic> json) {
+    return DebtPayment(
+      paymentId: json['paymentId'] ?? json['payment_id'] ?? 0,
+      debtId: json['debtId'] ?? json['debt_id'] ?? 0,
+      amountPaid: _toDouble(json['amountPaid'] ?? json['amount_paid']),
+      paymentDate:
+          DateTime.tryParse((json['paymentDate'] ?? '').toString()) ??
+          DateTime.now(),
+      paymentMethod: json['paymentMethod'] ?? json['payment_method'] ?? '',
+      confirmed: json['confirmed'] ?? false,
+      confirmedBy: json['confirmedBy'] ?? json['confirmed_by'],
+      confirmedAt: json['confirmedAt'] != null
+          ? DateTime.tryParse(json['confirmedAt'].toString())
+          : null,
+    );
+  }
+}
