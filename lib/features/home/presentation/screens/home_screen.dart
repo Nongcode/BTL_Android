@@ -5,57 +5,56 @@ import '../widgets/leaderboard_card.dart';
 import '../widgets/today_progress_card.dart';
 import '../widgets/monthly_fund_card.dart';
 
-class HomeScreen extends StatelessWidget {
+// 1. Chuyển thành StatefulWidget
+class HomeScreen extends StatefulWidget {
   final Function(int) onSwitchTab;
+  
+  // Constructor có thể là const vì không chứa GlobalKey trực tiếp nữa
   const HomeScreen({super.key, required this.onSwitchTab});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // 2. Khai báo GlobalKey ở trong State để nó được giữ nguyên khi vẽ lại
+  final GlobalKey<TodayProgressCardState> _progressCardKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
-        // Cho phép cuộn nếu màn hình nhỏ
         child: Column(
           children: [
             Stack(
               children: [
-                // 1. Header cong làm nền
                 const Padding(
-                  padding: EdgeInsets.only(
-                    bottom: 50.0,
-                  ), // Chừa chỗ cho Card đè lên
+                  padding: EdgeInsets.only(bottom: 50.0),
                   child: HomeHeader(),
                 ),
-
-                // 2. Card thông tin đè lên phần dưới của Header
-                // Dùng Positioned hoặc đơn giản là Margin âm (thủ thuật hay dùng)
                 Container(
-                  margin: const EdgeInsets.only(
-                    top: 280,
-                  ), // Đẩy xuống đè lên Header
+                  margin: const EdgeInsets.only(top: 280),
                   child: const HouseInfoCard(),
                 ),
               ],
             ),
 
-            // 3. Bảng xếp hạng
             const LeaderboardCard(),
 
+            // 3. Gắn Key vào TodayProgressCard
             TodayProgressCard(
+              key: _progressCardKey,
               onPressed: () {
-                // Khi bấm nút, ta gọi hàm onSwitchTab và truyền số 1 (Tab Việc nhà)
-                onSwitchTab(1);
+                widget.onSwitchTab(1); 
               },
             ),
 
-            // Quỹ chung tháng này
             MonthlyFundCard(
               onPressed: () {
-                // Chuyển sang tab Quỹ chung (index 2)
-                onSwitchTab(2);
+                widget.onSwitchTab(2);
               },
             ),
 
-            // 4. Các phần khác (Tiến độ)... để sau
             const SizedBox(height: 80),
           ],
         ),
