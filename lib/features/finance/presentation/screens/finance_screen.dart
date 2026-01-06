@@ -440,7 +440,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
 
                         // Số dự hiện tại
                         _buildQuotaRow(
-                          "Số dự hiện tại:",
+                          "Số dư hiện tại:",
                           summary != null ? _fmt(summary.currentBalance) : "…",
                           color: const Color(0xFF5DBDD4),
                         ),
@@ -475,8 +475,8 @@ class _FinanceScreenState extends State<FinanceScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
+                            onPressed: () async {
+                              final changed = await Navigator.push<bool>(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => FundDetailScreen(
@@ -486,6 +486,9 @@ class _FinanceScreenState extends State<FinanceScreen> {
                                   ),
                                 ),
                               );
+                              if (changed == true) {
+                                await _loadFinance();
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF5DBDD4),
