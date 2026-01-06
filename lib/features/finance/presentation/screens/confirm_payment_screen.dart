@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import '../widgets/finance_header.dart';
+import '../../data/service/finance_service.dart';
 
 class ConfirmPaymentScreen extends StatefulWidget {
   final String from;
   final String to;
-  final int amount;
+  final double amount;
+  final int debtId;
+  final int houseId;
 
   const ConfirmPaymentScreen({
     super.key,
     required this.from,
     required this.to,
     required this.amount,
+    required this.debtId,
+    this.houseId = 1,
   });
 
   @override
@@ -20,6 +25,18 @@ class ConfirmPaymentScreen extends StatefulWidget {
 class _ConfirmPaymentScreenState extends State<ConfirmPaymentScreen> {
   DateTime selectedDate = DateTime.now();
   final TextEditingController noteController = TextEditingController();
+  late final TextEditingController amountController;
+  late final FinanceService _service;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    amountController = TextEditingController(
+      text: widget.amount.toStringAsFixed(0),
+    );
+    _service = FinanceService(houseId: widget.houseId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,13 +77,40 @@ class _ConfirmPaymentScreenState extends State<ConfirmPaymentScreen> {
                         ),
                         children: [
                           TextSpan(
-                            text: "${widget.amount} đ",
+                            text: "${widget.amount.toStringAsFixed(0)} đ",
                             style: const TextStyle(
                               color: Color(0xFF5DBDD4),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  const Text(
+                    "Số tiền thanh toán",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: TextField(
+                      controller: amountController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: "Nhập số tiền",
                       ),
                     ),
                   ),
@@ -147,10 +191,7 @@ class _ConfirmPaymentScreenState extends State<ConfirmPaymentScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: lưu dữ liệu thanh toán
-                        Navigator.pop(context);
-                      },
+                      onPressed: _submitting ? null : _handleSubmit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF5DBDD4),
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -193,6 +234,44 @@ class _ConfirmPaymentScreenState extends State<ConfirmPaymentScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleSubmit() async {
+    if (_submitting) return;
+    final rawAmount =
+        double.tryParse(
+          amountController.text.replaceAll(RegExp(r'[^0-9.]'), ''),
+        ) ??
+        0;
+    if (rawAmount <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Nhập số tiền hợp lệ')));
+      return;
+    }
+    setState(() => _submitting = true);
+    final ok = await _service.payDebt(
+      debtId: widget.debtId,
+      amountPaid: rawAmount,
+      paymentDate: selectedDate,
+      paymentMethod: 'cash',
+      note: noteController.text.trim().isEmpty
+          ? null
+          : noteController.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Ghi nhận thanh toán thành công'
+              : 'Ghi nhận thanh toán thất bại',
+        ),
+        backgroundColor: ok ? Colors.green : Colors.red,
+      ),
+    );
+    if (ok) Navigator.pop(context, true);
   }
 
   Future<void> _pickDate() async {

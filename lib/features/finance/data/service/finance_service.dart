@@ -7,6 +7,9 @@ class FinanceService {
   final int houseId;
   final String? authToken;
 
+  // Lưu thông tin lỗi gần nhất để dễ debug trên UI
+  static String? lastDebtSummaryDebug;
+
   FinanceService({this.houseId = 1, this.authToken});
 
   Map<String, String> get _headers => {
@@ -234,6 +237,130 @@ class FinanceService {
     final uri = Uri.parse('${ApiUrls.commonExpenses(houseId)}/$expenseId');
     final res = await http.delete(uri, headers: _headers);
     return res.statusCode == 200;
+  }
+
+  Future<List<DebtPair>> fetchDebtSummary() async {
+    lastDebtSummaryDebug = null;
+    try {
+      final uri = Uri.parse(ApiUrls.debtSummary(houseId));
+      final res = await http.get(uri, headers: _headers);
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          final dynamic payload = body['data'];
+          List<dynamic> dataList = const [];
+
+          if (payload is List) {
+            dataList = payload;
+          } else if (payload is Map && payload['debtPairs'] is List) {
+            dataList = payload['debtPairs'] as List;
+          }
+
+          return dataList.map((e) => DebtPair.fromJson(e)).toList();
+        }
+      }
+      lastDebtSummaryDebug =
+          'status: ${res.statusCode}, body: ${res.body.toString()}';
+      // ignore: avoid_print
+      print('debtSummary error ${res.statusCode}: ${res.body}');
+      return [];
+    } catch (e) {
+      lastDebtSummaryDebug = e.toString();
+      // ignore: avoid_print
+      print('debtSummary exception: $e');
+      return [];
+    }
+  }
+
+  Future<List<DebtItem>> fetchDebts({
+    required int memberId,
+    String? status,
+  }) async {
+    try {
+      final query = <String, String>{'memberId': memberId.toString()};
+      if (status != null && status.isNotEmpty) query['status'] = status;
+      final uri = Uri.parse(
+        ApiUrls.debts(houseId),
+      ).replace(queryParameters: query);
+      final res = await http.get(uri, headers: _headers);
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          final List<dynamic> data =
+              body['data']?['debts'] ?? body['data'] ?? [];
+          return data.map((e) => DebtItem.fromJson(e)).toList();
+        }
+      }
+      // ignore: avoid_print
+      print('debts error ${res.statusCode}: ${res.body}');
+      return [];
+    } catch (e) {
+      // ignore: avoid_print
+      print('debts exception: $e');
+      return [];
+    }
+  }
+
+  Future<bool> payDebt({
+    required int debtId,
+    required double amountPaid,
+    required DateTime paymentDate,
+    String paymentMethod = 'cash',
+    String? note,
+  }) async {
+    final uri = Uri.parse(ApiUrls.payDebt(houseId, debtId));
+    final payload = {
+      'amountPaid': amountPaid,
+      'paymentDate': paymentDate.toIso8601String(),
+      'paymentMethod': paymentMethod,
+      if (note != null && note.isNotEmpty) 'note': note,
+    };
+    final res = await http.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    return res.statusCode == 200;
+  }
+
+  Future<bool> confirmDebtPayment({
+    required int paymentId,
+    bool confirmed = true,
+    String? note,
+  }) async {
+    final uri = Uri.parse(ApiUrls.confirmDebtPayment(houseId, paymentId));
+    final payload = {
+      'confirmed': confirmed,
+      if (note != null && note.isNotEmpty) 'note': note,
+    };
+    final res = await http.put(
+      uri,
+      headers: _headers,
+      body: jsonEncode(payload),
+    );
+    return res.statusCode == 200;
+  }
+
+  Future<List<DebtPayment>> fetchDebtPayments({required int debtId}) async {
+    try {
+      final uri = Uri.parse(ApiUrls.debtPayments(houseId, debtId));
+      final res = await http.get(uri, headers: _headers);
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          final List<dynamic> data =
+              body['data']?['payments'] ?? body['data'] ?? [];
+          return data.map((e) => DebtPayment.fromJson(e)).toList();
+        }
+      }
+      // ignore: avoid_print
+      print('debtPayments error ${res.statusCode}: ${res.body}');
+      return [];
+    } catch (e) {
+      // ignore: avoid_print
+      print('debtPayments exception: $e');
+      return [];
+    }
   }
 
   Future<bool> addAdHocExpense({
