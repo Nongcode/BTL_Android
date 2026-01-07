@@ -82,6 +82,45 @@ class FundSummary {
   }
 }
 
+class FundHistoryItem {
+  final int historyId;
+  final String type; // contribution | expense | adjust...
+  final int memberId;
+  final String memberName;
+  final double amount;
+  final String description;
+  final DateTime createdAt;
+
+  FundHistoryItem({
+    required this.historyId,
+    required this.type,
+    required this.memberId,
+    required this.memberName,
+    required this.amount,
+    required this.description,
+    required this.createdAt,
+  });
+
+  factory FundHistoryItem.fromJson(Map<String, dynamic> json) {
+    int _parseInt(dynamic v) {
+      if (v is int) return v;
+      return int.tryParse(v?.toString() ?? '') ?? 0;
+    }
+
+    return FundHistoryItem(
+      historyId: _parseInt(json['historyId'] ?? json['history_id']),
+      type: json['type'] ?? '',
+      memberId: _parseInt(json['memberId'] ?? json['member_id']),
+      memberName: json['memberName'] ?? json['member_name'] ?? '',
+      amount: _toDouble(json['amount']),
+      description: json['description'] ?? '',
+      createdAt:
+          DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
+          DateTime.now(),
+    );
+  }
+}
+
 class CommonExpense {
   final int id;
   final String title;
@@ -294,17 +333,20 @@ class DebtItem {
       return int.tryParse(v?.toString() ?? '') ?? 0;
     }
 
+    final double _remaining = _toDouble(
+      json['remainingAmount'] ?? json['remaining_amount'],
+    );
+
     return DebtItem(
       debtId: json['debtId'] ?? json['debt_id'] ?? 0,
       creditorId: json['creditorId'] ?? json['creditor_id'] ?? 0,
       creditorName: json['creditorName'] ?? json['creditor_name'] ?? '',
       expenseId: _parseInt(json['expenseId'] ?? json['expense_id']),
+
       originalAmount: _toDouble(
         json['originalAmount'] ?? json['original_amount'],
       ),
-      remainingAmount: _toDouble(
-        json['remainingAmount'] ?? json['remaining_amount'],
-      ),
+      remainingAmount: _remaining < 0 ? 0 : _remaining,
       status: json['status'] ?? 'pending',
       fromExpense: json['fromExpense'] ?? '',
       createdAt:
@@ -323,6 +365,7 @@ class DebtPayment {
   final bool confirmed;
   final String? confirmedBy;
   final DateTime? confirmedAt;
+  final String? note;
 
   DebtPayment({
     required this.paymentId,
@@ -330,22 +373,48 @@ class DebtPayment {
     required this.amountPaid,
     required this.paymentDate,
     required this.paymentMethod,
+    this.note,
     required this.confirmed,
     this.confirmedBy,
     this.confirmedAt,
   });
 
   factory DebtPayment.fromJson(Map<String, dynamic> json) {
+    int _parseInt(dynamic v) {
+      if (v is int) return v;
+      return int.tryParse(v?.toString() ?? '') ?? 0;
+    }
+
+    bool _parseBool(dynamic v) {
+      if (v is bool) return v;
+      if (v is String) {
+        final lower = v.toLowerCase();
+        if (lower == 'true') return true;
+        if (lower == 'false') return false;
+      }
+      if (v is num) return v != 0;
+      return false;
+    }
+
     return DebtPayment(
-      paymentId: json['paymentId'] ?? json['payment_id'] ?? 0,
-      debtId: json['debtId'] ?? json['debt_id'] ?? 0,
+      paymentId: _parseInt(
+        json['paymentId'] ?? json['payment_id'] ?? json['id'],
+      ),
+      debtId: _parseInt(json['debtId'] ?? json['debt_id'] ?? json['debt']),
       amountPaid: _toDouble(json['amountPaid'] ?? json['amount_paid']),
       paymentDate:
           DateTime.tryParse((json['paymentDate'] ?? '').toString()) ??
           DateTime.now(),
       paymentMethod: json['paymentMethod'] ?? json['payment_method'] ?? '',
-      confirmed: json['confirmed'] ?? false,
-      confirmedBy: json['confirmedBy'] ?? json['confirmed_by'],
+      note: json['note'] as String?,
+      confirmed: _parseBool(json['confirmed']),
+      confirmedBy: () {
+        final v = json['confirmedBy'] ?? json['confirmed_by'];
+        if (v is Map && v['memberName'] != null)
+          return v['memberName'].toString();
+        if (v is String) return v;
+        return null;
+      }(),
       confirmedAt: json['confirmedAt'] != null
           ? DateTime.tryParse(json['confirmedAt'].toString())
           : null,

@@ -7,6 +7,7 @@ import 'fund_detail_screen.dart';
 import 'add_expense_screen.dart';
 import 'confirm_payment_screen.dart';
 import 'payment_history_screen.dart';
+import 'fund_history_screen.dart';
 
 class FinanceScreen extends StatefulWidget {
   const FinanceScreen({super.key});
@@ -237,9 +238,9 @@ class _FinanceScreenState extends State<FinanceScreen> {
         const SnackBar(content: Text('Đã xóa chi tiêu phát sinh')),
       );
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Xóa thất bại, thử lại')));
+      final msg =
+          FinanceService.lastDeleteAdHocError ?? 'Xóa thất bại, thử lại';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -1128,14 +1129,20 @@ class _FinanceScreenState extends State<FinanceScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Còn lại: ${_fmt(debt.remainingAmount)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.redAccent,
-                  fontSize: 14,
-                ),
-              ),
+              () {
+                final remaining = debt.remainingAmount < 0
+                    ? 0
+                    : debt.remainingAmount;
+                final paidOff = remaining <= 0;
+                return Text(
+                  paidOff ? 'Đã thanh toán nợ' : 'Còn lại: ${_fmt(remaining)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: paidOff ? Colors.green : Colors.redAccent,
+                    fontSize: 14,
+                  ),
+                );
+              }(),
               Row(
                 children: [
                   TextButton(

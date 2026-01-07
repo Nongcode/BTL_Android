@@ -9,6 +9,7 @@ class FinanceService {
 
   // Lưu thông tin lỗi gần nhất để dễ debug trên UI
   static String? lastDebtSummaryDebug;
+  static String? lastDeleteAdHocError;
 
   FinanceService({this.houseId = 1, this.authToken});
 
@@ -137,7 +138,25 @@ class FinanceService {
   Future<bool> deleteAdHocExpense({required int expenseId}) async {
     final uri = Uri.parse('${ApiUrls.adHocExpenses(houseId)}/$expenseId');
     final res = await http.delete(uri, headers: _headers);
-    return res.statusCode == 200;
+    if (res.statusCode == 200) {
+      lastDeleteAdHocError = null;
+      return true;
+    }
+
+    // parse message nếu có để hiển thị
+    try {
+      final body = jsonDecode(res.body);
+      final msg = body is Map && body['message'] is String
+          ? body['message']
+          : null;
+      lastDeleteAdHocError = msg ?? res.body;
+    } catch (_) {
+      lastDeleteAdHocError = res.body;
+    }
+
+    // ignore: avoid_print
+    print('deleteAdHocExpense error ${res.statusCode}: ${res.body}');
+    return false;
   }
 
   Future<List<Contribution>> fetchContributions({int? month, int? year}) async {
@@ -301,6 +320,37 @@ class FinanceService {
     }
   }
 
+  Future<List<FundHistoryItem>> fetchFundHistory({
+    int? month,
+    int? year,
+    String type = 'all',
+  }) async {
+    try {
+      final query = <String, String>{};
+      if (month != null) query['month'] = month.toString();
+      if (year != null) query['year'] = year.toString();
+      if (type.isNotEmpty) query['type'] = type;
+      final uri = Uri.parse(
+        ApiUrls.fundHistory(houseId),
+      ).replace(queryParameters: query.isEmpty ? null : query);
+      final res = await http.get(uri, headers: _headers);
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body['success'] == true) {
+          final List<dynamic> data = body['data'] ?? [];
+          return data.map((e) => FundHistoryItem.fromJson(e)).toList();
+        }
+      }
+      // ignore: avoid_print
+      print('fundHistory error ${res.statusCode}: ${res.body}');
+      return [];
+    } catch (e) {
+      // ignore: avoid_print
+      print('fundHistory exception: $e');
+      return [];
+    }
+  }
+
   Future<bool> payDebt({
     required int debtId,
     required double amountPaid,
@@ -348,15 +398,47 @@ class FinanceService {
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body['success'] == true) {
-          final List<dynamic> data =
-              body['data']?['payments'] ?? body['data'] ?? [];
-          return data.map((e) => DebtPayment.fromJson(e)).toList();
+          dynamic data = body['data'];
+
+          List<dynamic> _decodeToList(dynamic value) {
+            if (value is List) return value;
+            if (value is String) {
+              try {
+                final decoded = jsonDecode(value);
+                if (decoded is List) return decoded;
+              } catch (_) {
+                return const [];
+              }
+            }
+            return const [];
+          }
+
+          final List<dynamic> list = () {
+            if (data is List) return data;
+            if (data is Map) return _decodeToList(data['payments']);
+            return _decodeToList(data);
+          }();
+
+          final List<DebtPayment> mapped = [];
+          for (final item in list) {
+            if (item is Map<String, dynamic>) {
+              try {
+                mapped.add(DebtPayment.fromJson(item));
+              } catch (e) {
+                // ignore: avoid_print
+                print('debtPayments parse item error: $e');
+              }
+            }
+          }
+          return mapped;
         }
       }
       // ignore: avoid_print
       print('debtPayments error ${res.statusCode}: ${res.body}');
       return [];
     } catch (e) {
+      // ignore: avoid_print
+      print('debtPayments raw response error: $e');
       // ignore: avoid_print
       print('debtPayments exception: $e');
       return [];
