@@ -1,8 +1,102 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../../finance/data/models/finance_model.dart';
+import '../../../finance/data/service/finance_service.dart';
+import '../../../finance/logic/finance_sync.dart';
 
-class MonthlyFundCard extends StatelessWidget {
+class MonthlyFundCard extends StatefulWidget {
   final VoidCallback? onPressed;
-  const MonthlyFundCard({super.key, this.onPressed});
+  final int houseId;
+  final int currentMemberId;
+
+  const MonthlyFundCard({
+    super.key,
+    this.onPressed,
+    this.houseId = 1,
+    this.currentMemberId = 1,
+  });
+
+  @override
+  State<MonthlyFundCard> createState() => _MonthlyFundCardState();
+}
+
+class _MonthlyFundCardState extends State<MonthlyFundCard> {
+  late final FinanceService _service;
+  FundSummary? _summary;
+  double _debtOwed = 0;
+  bool _loading = true;
+  String? _error;
+  final NumberFormat _fmt = NumberFormat.currency(
+    locale: 'vi_VN',
+    symbol: 'đ',
+    decimalDigits: 0,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _service = FinanceService(houseId: widget.houseId);
+    FinanceSync.version.addListener(_handleSync);
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    FinanceSync.version.removeListener(_handleSync);
+    super.dispose();
+  }
+
+  void _handleSync() {
+    _loadData();
+  }
+
+  Future<void> refresh() => _loadData();
+
+  Future<void> _loadData() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final now = DateTime.now();
+    try {
+      final data = await _service.fetchFundSummary(
+        month: now.month,
+        year: now.year,
+      );
+      final debts = await _service.fetchDebts(memberId: widget.currentMemberId);
+      if (!mounted) return;
+      setState(() {
+        _summary = data;
+        _debtOwed = _sumDebtOwed(debts);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Không tải được dữ liệu quỹ');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  MemberStatus? get _userStatus {
+    final members = _summary?.memberStatus ?? [];
+    try {
+      return members.firstWhere((m) => m.memberId == widget.currentMemberId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool get _userContributed => _userStatus?.status == 'contributed';
+
+  double _sumDebtOwed(List<DebtItem> debts) {
+    double total = 0;
+    for (final d in debts) {
+      final remaining = d.remainingAmount < 0 ? 0 : d.remainingAmount;
+      total += remaining;
+    }
+    return total;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,36 +117,36 @@ class MonthlyFundCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// ---------------- CARD 1: QUỸ CHUNG ----------------
-          _buildFundSummary(),
+          if (_loading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+            )
+          else ...[
+            /// ---------------- CARD 1: QUỸ CHUNG ----------------
+            _buildFundSummary(),
 
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          /// ---------------- CARD 2: NỢ CỦA BẠN ----------------
-          _buildDebtStatus(),
+            /// ---------------- CARD 2: TRẠNG THÁI ĐÓNG QUỸ ----------------
+            _buildDebtStatus(),
+          ],
 
-          const SizedBox(height: 20),
-
-          /// ---------------- LIST EXPENSE ITEMS ----------------
-          _buildExpenseItem(
-            title: "Bình nước uống",
-            subtitle: "90.000 đ · trừ quỹ ngày 10/11",
-          ),
-          const SizedBox(height: 16),
-
-          _buildExpenseItem(
-            title: "Nước rửa chén",
-            subtitle: "45.000 đ · trừ quỹ ngày 08/11",
-          ),
-
-          const SizedBox(height: 26),
+          const SizedBox(height: 24),
 
           /// ---------------- BUTTON ----------------
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: onPressed,
+              onPressed: widget.onPressed,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF50C2C9),
                 foregroundColor: Colors.white,
@@ -75,6 +169,15 @@ class MonthlyFundCard extends StatelessWidget {
   // ---------------- UI BLOCKS ----------------
 
   Widget _buildFundSummary() {
+    final summary = _summary;
+    final memberStatus = _userStatus;
+    final contributionText = summary != null
+        ? _fmt.format(summary.contributionAmount)
+        : '-';
+    final balanceText = summary != null
+        ? _fmt.format(summary.currentBalance)
+        : '...';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -112,12 +215,12 @@ class MonthlyFundCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          _buildRow("Mức đóng:", "500.000 đ/người"),
+          _buildRow("Mức đóng:", "$contributionText/người"),
           const SizedBox(height: 6),
 
           _buildRow(
             "Số dư quỹ sinh hoạt:",
-            "1.350.000 đ",
+            balanceText,
             const Color(0xFF00AA55),
           ),
           const SizedBox(height: 6),
@@ -130,24 +233,7 @@ class MonthlyFundCard extends StatelessWidget {
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 134, 205, 169),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  "ĐÃ ĐÓNG",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              _statusChip(memberStatus),
             ],
           ),
         ],
@@ -156,6 +242,16 @@ class MonthlyFundCard extends StatelessWidget {
   }
 
   Widget _buildDebtStatus() {
+    final summary = _summary;
+    final contributionAmount = summary?.contributionAmount ?? 0;
+    final memberStatus = _userStatus;
+    final pendingText = _fmt.format(contributionAmount);
+
+    final isPaid = _userContributed;
+    final fundDue = isPaid ? 0 : contributionAmount;
+    final totalDue = fundDue + _debtOwed;
+    final totalText = _fmt.format(totalDue);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -176,38 +272,25 @@ class MonthlyFundCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          _buildRow("Bạn đang nợ:", "500.000 đ/người", const Color(0xFFFF9500)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpenseItem({required String title, required String subtitle}) {
-    return GestureDetector(
-      onTap: () {},
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                ),
-              ],
+          _buildRow(
+            isPaid ? "Bạn đã đóng quỹ:" : "Bạn cần đóng quỹ:",
+            _fmt.format(
+              isPaid ? (memberStatus?.amount ?? contributionAmount) : fundDue,
             ),
+            isPaid ? const Color(0xFF00AA55) : const Color(0xFFFF9500),
           ),
-
-          const Icon(Icons.chevron_right, color: Colors.black87, size: 24),
+          const SizedBox(height: 8),
+          _buildRow(
+            "Nợ chi tiêu phát sinh:",
+            _fmt.format(_debtOwed),
+            _debtOwed > 0 ? const Color(0xFFFF9500) : Colors.black87,
+          ),
+          const Divider(height: 18),
+          _buildRow(
+            "Tổng bạn đang nợ:",
+            totalText,
+            totalDue > 0 ? const Color(0xFFFF3B30) : const Color(0xFF00AA55),
+          ),
         ],
       ),
     );
@@ -231,6 +314,42 @@ class MonthlyFundCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _statusChip(MemberStatus? status) {
+    final contributed = _userContributed;
+    final label = contributed ? 'ĐÃ ĐÓNG' : 'CHƯA ĐÓNG';
+    final bg = contributed
+        ? const Color.fromARGB(255, 134, 205, 169)
+        : const Color(0xFFFFE5C2);
+    final color = contributed ? Colors.white : const Color(0xFFFF9500);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            contributed ? Icons.check_circle_outline : Icons.hourglass_bottom,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

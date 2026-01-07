@@ -28,6 +28,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
   bool _loading = false;
   String? _error;
   int? _deletingId;
+  int? _confirmingMemberId;
   bool _changed = false;
   late final FinanceService _service;
   final NumberFormat _fmt = NumberFormat.currency(
@@ -51,13 +52,9 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       _error = null;
     });
 
-    final now = DateTime.now();
-    final month = _selectedMonth == 0
-        ? now.month
-        : now.subtract(const Duration(days: 30)).month;
-    final year = _selectedMonth == 0
-        ? now.year
-        : now.subtract(const Duration(days: 30)).year;
+    final selected = _selectedMonthYear();
+    final month = selected['month']!;
+    final year = selected['year']!;
 
     try {
       final result = await Future.wait([
@@ -77,6 +74,52 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       });
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Map<String, int> _selectedMonthYear() {
+    final now = DateTime.now();
+    final target = _selectedMonth == 0
+        ? now
+        : DateTime(now.year, now.month - 1, 1);
+    return {'month': target.month, 'year': target.year};
+  }
+
+  Future<void> _confirmContribution(MemberStatus member) async {
+    if (_confirmingMemberId != null) return;
+    final amount = _summary?.contributionAmount;
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chưa có mức đóng quỹ hợp lệ')),
+      );
+      return;
+    }
+
+    final selected = _selectedMonthYear();
+
+    setState(() => _confirmingMemberId = member.memberId);
+    final ok = await _service.addContribution(
+      memberId: member.memberId,
+      amount: amount,
+      contributionDate: DateTime.now(),
+      month: selected['month']!,
+      year: selected['year']!,
+    );
+
+    if (!mounted) return;
+    setState(() => _confirmingMemberId = null);
+
+    if (ok) {
+      _changed = true;
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã xác nhận thành viên đóng quỹ')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Xác nhận thất bại, thử lại')),
+      );
     }
   }
 
@@ -367,6 +410,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       children: members.map((m) {
         final hasPaid = m.status == 'contributed';
         final amountText = hasPaid ? _fmt.format(m.amount) : 'Chưa đóng';
+        final isConfirming = _confirmingMemberId == m.memberId;
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -408,28 +452,91 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                 ],
               ),
 
-              // Status
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: hasPaid
-                      ? const Color(0xFF00AA55).withOpacity(0.12)
-                      : const Color(0xFFFFA500).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  amountText,
-                  style: TextStyle(
-                    color: hasPaid
-                        ? const Color(0xFF00AA55)
-                        : const Color(0xFFFFA500),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
+              // Status + Confirm button
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: hasPaid
+                          ? const Color(0xFF00AA55).withOpacity(0.12)
+                          : const Color(0xFFFFA500).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      amountText,
+                      style: TextStyle(
+                        color: hasPaid
+                            ? const Color(0xFF00AA55)
+                            : const Color(0xFFFFA500),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
-                ),
+                  if (!hasPaid) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: isConfirming
+                          ? null
+                          : () => _confirmContribution(m),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF5DBDD4), Color(0xFF7DD4E8)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF5DBDD4).withOpacity(0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: isConfirming
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline,
+                                    color: Colors.white,
+                                    size: 14,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Xác nhận',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

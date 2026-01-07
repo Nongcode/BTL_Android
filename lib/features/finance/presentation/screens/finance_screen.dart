@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/finance_model.dart';
 import '../../data/service/finance_service.dart';
+import '../../logic/finance_sync.dart';
 import '../widgets/finance_stat_card.dart';
 import 'fund_detail_screen.dart';
 import 'add_expense_screen.dart';
@@ -22,16 +23,21 @@ class _FinanceScreenState extends State<FinanceScreen> {
   int _expenseTabIndex = 0; // 0 = Chi tiêu, 1 = Doanh thu
   late String _contributionAmount;
   final FinanceService _service = FinanceService(houseId: 1);
+  final int _currentMemberId = 1; // TODO: thay bằng memberId thực tế từ session
   FundSummary? _summary;
   List<CommonExpense> _commonExpenses = [];
   List<AdHocExpense> _adHocExpenses = [];
   int? _deletingAdHocId;
   List<DebtItem> _debts = [];
+  List<DebtItem> _personalDebts = [];
   int? _selectedDebtMemberId;
   bool _loadingDebts = false;
   bool _loading = false;
   String? _error;
   String? _debtError;
+  double _fundDue = 0;
+  double _adHocDue = 0;
+  double _totalDue = 0;
 
   final NumberFormat _currency = NumberFormat.currency(
     locale: 'vi_VN',
@@ -55,21 +61,27 @@ class _FinanceScreenState extends State<FinanceScreen> {
       final summary = await _service.fetchFundSummary();
       final common = await _service.fetchCommonExpenses();
       final adHoc = await _service.fetchAdHocExpenses();
+      final personalDebts = await _service.fetchDebts(
+        memberId: _currentMemberId,
+      );
       if (!mounted) return;
       setState(() {
         _summary = summary;
         _commonExpenses = common;
         _adHocExpenses = adHoc;
+        _personalDebts = personalDebts;
         if (summary != null) {
           _contributionAmount =
               "${_currency.format(summary.contributionAmount)} /người";
           FinanceScreen.contributionAmount = _contributionAmount;
         }
+        _updatePersonalDebt();
         _initDebtMember(summary);
       });
       if (_selectedDebtMemberId != null) {
         await _loadDebtsForMember(_selectedDebtMemberId!);
       }
+      FinanceSync.bump();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -80,6 +92,33 @@ class _FinanceScreenState extends State<FinanceScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  void _updatePersonalDebt() {
+    final summary = _summary;
+    final ms = summary?.memberStatus.firstWhere(
+      (m) => m.memberId == _currentMemberId,
+      orElse: () => MemberStatus(
+        memberId: _currentMemberId,
+        memberName: 'Bạn',
+        status: 'pending',
+        amount: 0,
+        contributedAt: null,
+        note: null,
+      ),
+    );
+
+    final contributed = ms?.status == 'contributed';
+    final contributionAmount = summary?.contributionAmount ?? 0;
+    _fundDue = contributed ? 0 : contributionAmount;
+
+    double adHoc = 0;
+    for (final d in _personalDebts) {
+      final remaining = d.remainingAmount < 0 ? 0 : d.remainingAmount;
+      adHoc += remaining;
+    }
+    _adHocDue = adHoc;
+    _totalDue = _fundDue + _adHocDue;
   }
 
   void _initDebtMember(FundSummary? summary) {
@@ -440,7 +479,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
                       Expanded(
                         child: FinanceStatCard(
                           title: "Bạn đang nợ",
-                          amount: "0 đ",
+                          amount: _fmt(_totalDue),
                           amountColor: const Color(0xFFFC9F66),
                           icon: Container(
                             width: 28,
@@ -671,6 +710,10 @@ class _FinanceScreenState extends State<FinanceScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFF5DBDD4),
+                        width: 1.5,
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

@@ -8,7 +8,7 @@ import '../widgets/monthly_fund_card.dart';
 // 1. Chuyển thành StatefulWidget
 class HomeScreen extends StatefulWidget {
   final Function(int) onSwitchTab;
-  
+
   // Constructor có thể là const vì không chứa GlobalKey trực tiếp nữa
   const HomeScreen({super.key, required this.onSwitchTab});
 
@@ -45,11 +45,13 @@ class _HomeScreenState extends State<HomeScreen> {
             TodayProgressCard(
               key: _progressCardKey,
               onPressed: () {
-                widget.onSwitchTab(1); 
+                widget.onSwitchTab(1);
               },
             ),
 
             MonthlyFundCard(
+              houseId: 1,
+              currentMemberId: 1,
               onPressed: () {
                 widget.onSwitchTab(2);
               },
