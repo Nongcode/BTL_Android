@@ -45,6 +45,8 @@ class ApiUrls {
       '${financeHouse(houseId)}/fund/settings';
   static String fundContributions(int houseId) =>
       '${financeHouse(houseId)}/fund/contributions';
+  static String fundHistory(int houseId) =>
+      '${financeHouse(houseId)}/fund/history';
 
   static String commonExpenses(int houseId) =>
       '${financeHouse(houseId)}/expenses/common';

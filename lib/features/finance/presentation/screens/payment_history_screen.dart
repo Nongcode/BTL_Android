@@ -61,6 +61,17 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    String _methodLabel(String method) {
+      switch (method) {
+        case 'cash':
+          return 'Tiền mặt';
+        case 'bank_transfer':
+          return 'Chuyển khoản';
+        default:
+          return method.isNotEmpty ? method : 'Khác';
+      }
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFE8F8FB),
       body: Column(
@@ -87,13 +98,31 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                     );
                   }
                   final p = _payments[index];
+                  final paymentMethodVi = () {
+                    switch ((p.paymentMethod).toLowerCase()) {
+                      case 'cash':
+                        return 'Tiền mặt';
+                      case 'bank_transfer':
+                        return 'Chuyển khoản';
+                      default:
+                        return p.paymentMethod;
+                    }
+                  }();
+
+                  final subtitle = () {
+                    final dateText =
+                        '${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year}';
+                    if (p.note != null && p.note!.trim().isNotEmpty) {
+                      return '$dateText · ${p.note!.trim()}';
+                    }
+                    return '$dateText · $paymentMethodVi';
+                  }();
+
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     child: ListTile(
                       title: Text('${p.amountPaid.toStringAsFixed(0)} đ'),
-                      subtitle: Text(
-                        '${p.paymentDate.day}/${p.paymentDate.month}/${p.paymentDate.year} · ${p.paymentMethod}',
-                      ),
+                      subtitle: Text(subtitle),
                       trailing: p.confirmed
                           ? const Icon(Icons.check_circle, color: Colors.green)
                           : (_loading
