@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+// Import Service Auth
+import '../../data/auth_service.dart';
 import 'register_screen.dart';
 import '../../../../../main_screen.dart';
 
@@ -11,10 +13,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
+  // Đổi tên thành _usernameController cho khớp với Backend
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final AuthService _authService = AuthService(); // Khởi tạo Service
+
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 40),
-              // Logo hoặc tiêu đề
+              // Logo
               Center(
                 child: Column(
                   children: [
@@ -37,15 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: 250,
                     ),
                     const SizedBox(height: 16),
-                    // const Text(
-                    //   'HousePal',
-                    //   style: TextStyle(
-                    //     fontSize: 32,
-                    //     fontWeight: FontWeight.bold,
-                    //     color: Color(0xFF5DBDD4),
-                    //   ),
-                    // ),
-                    // const SizedBox(height: 8),
                     const Text(
                       'Chào mừng bạn trở lại',
                       style: TextStyle(fontSize: 26, color: Colors.grey),
@@ -55,9 +58,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 30),
 
-              // Email field
+              // Username / Phone field
               const Text(
-                'Số điện thoại',
+                'Email đăng nhập', // Sửa label cho tổng quát
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -66,11 +69,11 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
+                controller: _usernameController, // Dùng controller mới
+                keyboardType: TextInputType.text,
                 decoration: InputDecoration(
-                  hintText: 'Nhập số điện thoại của bạn',
-                  prefixIcon: const Icon(Icons.phone, color: Color(0xFF5DBDD4)),
+                  hintText: 'Nhập email đăng nhập',
+                  prefixIcon: const Icon(Icons.email, color: Color(0xFF5DBDD4)), // Đổi icon thành Person cho hợp lý
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Colors.grey),
@@ -177,86 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Divider
-              // Row(
-              //   children: [
-              //     Expanded(child: Divider(color: Colors.grey.shade300)),
-              //     const Padding(
-              //       padding: EdgeInsets.symmetric(horizontal: 16),
-              //       child: Text('hoặc', style: TextStyle(color: Colors.grey)),
-              //     ),
-              //     Expanded(child: Divider(color: Colors.grey.shade300)),
-              //   ],
-              // ),
-              // const SizedBox(height: 24),
-
-              // Social login buttons (optional)
-              // Row(
-              //   children: [
-              //     Expanded(
-              //       child: OutlinedButton(
-              //         onPressed: () {
-              //           // TODO: Google login
-              //         },
-              //         style: OutlinedButton.styleFrom(
-              //           padding: const EdgeInsets.symmetric(vertical: 12),
-              //           side: const BorderSide(color: Colors.grey),
-              //           shape: RoundedRectangleBorder(
-              //             borderRadius: BorderRadius.circular(12),
-              //           ),
-              //         ),
-              //         child: Row(
-              //           mainAxisAlignment: MainAxisAlignment.center,
-              //           children: [
-              //             const Icon(
-              //               Icons.g_mobiledata,
-              //               color: Colors.red,
-              //               size: 20,
-              //             ),
-              //             const SizedBox(width: 8),
-              //             const Text(
-              //               'Google',
-              //               style: TextStyle(color: Colors.black87),
-              //             ),
-              //           ],
-              //         ),
-              //       ),
-              //     ),
-              //     const SizedBox(width: 16),
-              //     Expanded(
-              //       child: OutlinedButton(
-              //         onPressed: () {
-              //           // TODO: Facebook login
-              //         },
-              //         style: OutlinedButton.styleFrom(
-              //           padding: const EdgeInsets.symmetric(vertical: 12),
-              //           side: const BorderSide(color: Colors.grey),
-              //           shape: RoundedRectangleBorder(
-              //             borderRadius: BorderRadius.circular(12),
-              //           ),
-              //         ),
-              //         child: Row(
-              //           mainAxisAlignment: MainAxisAlignment.center,
-              //           children: [
-              //             const Icon(
-              //               Icons.facebook,
-              //               color: Colors.blue,
-              //               size: 20,
-              //             ),
-              //             const SizedBox(width: 8),
-              //             const Text(
-              //               'Facebook',
-              //               style: TextStyle(color: Colors.black87),
-              //             ),
-              //           ],
-              //         ),
-              //       ),
-              //     ),
-              //   ],
-              // ),
-              // const SizedBox(height: 32),
-
-              // Register link
+              // Register Link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -290,32 +214,72 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // --- HÀM XỬ LÝ ĐĂNG NHẬP ---
   void _login() async {
-    // TODO: Implement login logic
-    final email = _emailController.text.trim();
+    // 1. Lấy dữ liệu từ ô nhập
+    final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
+    // 2. Kiểm tra rỗng
+    if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập email và mật khẩu')),
+        const SnackBar(
+          content: Text('Vui lòng nhập tên đăng nhập và mật khẩu'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
+    // 3. Bật trạng thái Loading
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate loading time for better UX
-    await Future.delayed(const Duration(seconds: 2));
+    // 4. Gọi API Login
+    final result = await _authService.login(username, password);
 
-    // TODO: Call login API
-    // For now, just navigate to main screen
+    // 5. Tắt loading khi có kết quả
     if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
+      setState(() {
+        _isLoading = false;
+      });
+    }
+
+    // 6. Xử lý kết quả
+    if (result['success']) {
+      // --- THÀNH CÔNG ---
+      final data = result['data'];
+      final token = data['token'];
+      final user = data['user'];
+
+      print("Login thành công! Token: $token");
+      print("User: ${user['full_name']}");
+
+      // TODO: Ở bước này bạn nên lưu Token vào SharedPreferences
+      // await SharedPreferences.getInstance().then((prefs) {
+      //   prefs.setString('accessToken', token);
+      //   prefs.setString('userId', user['id'].toString());
+      // });
+
+      if (mounted) {
+        // Chuyển sang màn hình chính và xóa các màn hình cũ khỏi stack
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+          (route) => false,
+        );
+      }
+    } else {
+      // --- THẤT BẠI ---
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Đăng nhập thất bại'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }
