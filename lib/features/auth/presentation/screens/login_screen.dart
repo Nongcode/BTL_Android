@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // Import Service Auth
 import '../../data/auth_service.dart';
 import 'register_screen.dart';
@@ -256,11 +257,20 @@ class _LoginScreenState extends State<LoginScreen> {
       print("Login thành công! Token: $token");
       print("User: ${user['full_name']}");
 
-      // TODO: Ở bước này bạn nên lưu Token vào SharedPreferences
-      // await SharedPreferences.getInstance().then((prefs) {
-      //   prefs.setString('accessToken', token);
-      //   prefs.setString('userId', user['id'].toString());
-      // });
+      // Lưu token và thông tin người dùng vào SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (token != null) await prefs.setString('accessToken', token);
+        if (user != null) {
+          final idValue = user['id'] ?? user['user_id'] ?? user['userId'];
+          if (idValue != null) await prefs.setString('userId', idValue.toString());
+          final fullName = user['full_name'] ?? user['fullName'] ?? user['username'] ?? '';
+          if (fullName.isNotEmpty) await prefs.setString('fullName', fullName);
+        }
+      } catch (e) {
+        // Nếu không lưu được, in ra log (không block flow)
+        print('Lỗi khi lưu SharedPreferences: $e');
+      }
 
       if (mounted) {
         // Chuyển sang màn hình chính và xóa các màn hình cũ khỏi stack

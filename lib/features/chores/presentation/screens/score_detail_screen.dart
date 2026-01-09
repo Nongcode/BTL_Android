@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Cần import thư viện này
 import '../../../../core/constants/app_colors.dart';
-// Import Service
 import '../../data/service/chore_service.dart';
 
 class ScoreDetailScreen extends StatefulWidget {
-  final String userName;
-  // Nhận thêm tháng/năm để biết đang xem lịch sử của tháng nào (Mặc định là hiện tại)
+  // Bỏ tham số cứng nhắc userName đi, chỉ cần tháng/năm
+  final int? targetUserId;    // Nếu null -> Lấy ID người đang đăng nhập
+  final String? targetUserName; // Tên hiển thị
+  
   final int? initialMonth;
   final int? initialYear;
 
   const ScoreDetailScreen({
     super.key, 
-    this.userName = "Long",
+    this.targetUserId,       // <--- Mới thêm
+    this.targetUserName,     // <--- Mới thêm
     this.initialMonth,
     this.initialYear
   });
@@ -26,7 +29,11 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
   
   List<Map<String, dynamic>> _historyList = [];
   bool _isLoading = true;
-  int _totalScore = 0; // Tính tổng điểm để hiển thị trên header
+  int _totalScore = 0;
+  
+  // Biến lưu thông tin người dùng hiện tại
+  String _currentUserName = ""; 
+  int? _currentUserId;
 
   late int _currentMonth;
   late int _currentYear;
@@ -34,38 +41,78 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Khởi tạo tháng năm (nếu không truyền thì lấy hiện tại)
     final now = DateTime.now();
     _currentMonth = widget.initialMonth ?? now.month;
     _currentYear = widget.initialYear ?? now.year;
     
-    _fetchHistory();
+    // Bước 1: Load thông tin người dùng trước
+    _loadUserData();
+  }
+
+  // Hàm lấy thông tin từ bộ nhớ máy (SharedPreferences)
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Lấy dữ liệu đã lưu khi Đăng nhập
+    // Lưu ý: Key 'fullName' và 'userId' phải khớp với lúc bạn lưu ở LoginScreen
+    final savedName = prefs.getString('fullName') ?? "Bạn";
+    
+    // Xử lý lấy ID (có thể lưu dạng int hoặc string tùy code cũ của bạn)
+    int? savedId;
+    if (prefs.containsKey('userId')) {
+       final idValue = prefs.get('userId');
+       if (idValue is int) {
+         savedId = idValue;
+       } else if (idValue is String) {
+         savedId = int.tryParse(idValue);
+       }
+    }
+
+    if (mounted) {
+      setState(() {
+        _currentUserName = savedName;
+        _currentUserId = savedId;
+      });
+
+      // Bước 2: Sau khi có ID thì mới gọi API lấy lịch sử
+      if (_currentUserId != null) {
+        _fetchHistory();
+      } else {
+        print("Lỗi: Không tìm thấy User ID. Vui lòng đăng nhập lại.");
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _fetchHistory() async {
+    if (_currentUserId == null) return;
+
     setState(() => _isLoading = true);
     try {
-      final data = await _choreService.getScoreHistory(widget.userName, _currentMonth, _currentYear);
+      // Gọi API với ID thực tế của người dùng
+      final data = await _choreService.getScoreHistory(_currentUserId!, _currentMonth, _currentYear);
       
-      // Tính tổng điểm từ danh sách trả về
+      // Tính tổng điểm
       int total = 0;
       for (var item in data) {
-        total += (item['points_change'] as int);
+        // Đảm bảo ép kiểu an toàn
+        total += (item['points_change'] ?? 0) as int;
       }
 
       if (mounted) {
         setState(() {
-          _historyList = data;
+          _historyList = List<Map<String, dynamic>>.from(data);
           _totalScore = total;
           _isLoading = false;
         });
       }
     } catch (e) {
+      print("Lỗi fetch history: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // Hàm helper để format thời gian (Hôm nay, Hôm qua...)
+  // Helper: Format thời gian
   String _formatTime(String? dateString) {
     if (dateString == null) return "";
     DateTime date = DateTime.parse(dateString).toLocal();
@@ -85,15 +132,15 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
     }
   }
 
-  // Hàm helper để lấy Icon (Bạn có thể map string từ DB sang IconData ở đây)
+  // Helper: Chọn icon
   IconData _getIcon(String? iconType) {
-    // Ví dụ đơn giản, bạn có thể mở rộng map này
     switch (iconType) {
       case 'water': return Icons.water_drop;
       case 'trash': return Icons.delete_outline;
       case 'shopping': return Icons.shopping_cart_outlined;
       case 'clean': return Icons.cleaning_services;
-      default: return Icons.star_outline; // Icon mặc định
+      case 'cooking': return Icons.soup_kitchen;
+      default: return Icons.star_outline;
     }
   }
 
@@ -108,7 +155,11 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text("Lịch sử điểm của ${widget.userName}", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
+        // Hiển thị tên người dùng động
+        title: Text(
+          "Lịch sử điểm của $_currentUserName", 
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)
+        ),
         centerTitle: true,
       ),
       body: Column(
@@ -119,7 +170,7 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [const Color(0xFF40C4C6), const Color(0xFF40C4C6).withOpacity(0.8)], // AppColors.primary
+                colors: [const Color(0xFF40C4C6), const Color(0xFF40C4C6).withOpacity(0.8)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -159,10 +210,10 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
           ),
 
           // 2. Tiêu đề danh sách
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Row(
-              children: const [
+              children: [
                 Icon(Icons.history, color: Colors.grey),
                 SizedBox(width: 8),
                 Text("Hoạt động chi tiết", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
@@ -170,21 +221,31 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
             ),
           ),
 
-          // 3. Danh sách lịch sử (Dynamic)
+          // 3. Danh sách
           Expanded(
             child: _isLoading 
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF40C4C6)))
               : _historyList.isEmpty
-                  ? Center(child: Text("Chưa có lịch sử điểm tháng $_currentMonth", style: const TextStyle(color: Colors.grey)))
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.history_toggle_off, size: 60, color: Colors.grey[300]),
+                          const SizedBox(height: 10),
+                          Text("Chưa có lịch sử điểm tháng $_currentMonth", style: const TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    )
                   : ListView.separated(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemCount: _historyList.length,
-                      separatorBuilder: (context, index) => const Divider(height: 1),
+                      separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.black12),
                       itemBuilder: (context, index) {
                         final item = _historyList[index];
-                        final points = item['points_change'] as int;
+                        final points = (item['points_change'] ?? 0) as int;
                         final isBonus = points > 0;
-                        final title = item['chore_title'] ?? item['reason'] ?? "Điểm thưởng/phạt";
+                        // Ưu tiên lấy title từ việc nhà, nếu không có lấy lý do
+                        final title = item['chore_title'] ?? item['reason'] ?? "Thay đổi điểm";
                         final timeStr = _formatTime(item['created_at']);
                         final iconData = _getIcon(item['icon_type']);
 
@@ -192,7 +253,7 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           child: Row(
                             children: [
-                              // Icon
+                              // Icon nền màu
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
@@ -207,7 +268,7 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
                               ),
                               const SizedBox(width: 15),
                               
-                              // Nội dung
+                              // Nội dung text
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,7 +286,7 @@ class _ScoreDetailScreenState extends State<ScoreDetailScreen> {
                                 ),
                               ),
 
-                              // Điểm số
+                              // Số điểm (+10 hoặc -5)
                               Text(
                                 "${isBonus ? '+' : ''}$points",
                                 style: TextStyle(

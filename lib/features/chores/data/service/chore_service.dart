@@ -163,16 +163,15 @@ class ChoreService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getScoreHistory(String username, int month, int year) async {
+  Future<List<dynamic>> getScoreHistory(int userId, int month, int year) async {
     try {
-      // URL ví dụ: .../api/chores/scores/history?username=Long&month=12&year=2025
-      final url = '${ApiUrls.chores}/scores/history?username=$username&month=$month&year=$year';
+      // Backend API: GET /api/chores/scores/history?userId=1&month=1&year=2026
+      final url = '${ApiUrls.chores}/scores/history?userId=$userId&month=$month&year=$year';
       
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.cast<Map<String, dynamic>>();
+        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
       } else {
         return [];
       }
@@ -182,9 +181,10 @@ class ChoreService {
     }
   }
 
-  Future<Map<String, dynamic>?> getMyScoreStats() async {
+  Future<Map<String, dynamic>?> getMyScoreStats({int? userId}) async {
     try {
-      final url = '${ApiUrls.chores}/scores/my-stats';
+      String url = '${ApiUrls.chores}/scores/my-stats';
+      if (userId != null) url += '?userId=$userId';
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
