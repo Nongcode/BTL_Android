@@ -14,7 +14,7 @@ class Chore {
 
   final int points;          
   final int bonusPoints;     
-  final int penaltyPoints;  
+  final int penaltyPoints;   
   
   final bool isRotating;     
   final List<int> rotationOrder; 
@@ -47,10 +47,7 @@ class Chore {
     
     // Helper lấy đường dẫn ảnh từ type
     String getIconPath(String? type) {
-      // Nếu type rỗng hoặc null, trả về chổi mặc định
       if (type == null || type.isEmpty) return 'assets/images/icons/broom.png';
-      
-      // Map các loại icon
       switch (type) {
         case 'cooking': return 'assets/images/icons/cooking.png';
         case 'trash': return 'assets/images/icons/trash.png';
@@ -58,6 +55,7 @@ class Chore {
         case 'card': return 'assets/images/icons/card.png';
         case 'water': return 'assets/images/icons/water.png';
         case 'wc': return 'assets/images/icons/wc.png';
+        case 'repair': return 'assets/images/icons/repair.png'; // Bổ sung cho đủ
         default: return 'assets/images/icons/broom.png';
       }
     }
@@ -66,34 +64,32 @@ class Chore {
       id: json['id'].toString(),
       templateId: json['chore_template_id'] ?? json['template_id'],
       title: json['title'] ?? 'Công việc',
-      description: json['description'], // Map description
+      description: json['description'], 
       
-      // Ưu tiên lấy assignee_name từ server, nếu không có thì ghi 'Chưa giao'
       assigneeName: json['assignee_name'] ?? 'Chưa giao', 
       assigneeId: json['assignee_id'], 
 
-      // Map trạng thái
       status: json['status'] ?? 'PENDING',
       isDone: json['status'] == 'COMPLETED',
       
-      // Map Icon
       iconType: json['icon_type'] ?? 'broom',
       iconAsset: getIconPath(json['icon_type']),
       
-      // Map điểm số
       points: json['base_points'] ?? 0,
       bonusPoints: json['bonus_points'] ?? 0,
       penaltyPoints: json['penalty_points'] ?? 0,
 
-      // Map cấu hình xoay vòng
       isRotating: json['is_rotating'] ?? false,
       rotationOrder: json['rotation_order'] != null 
           ? List<int>.from(json['rotation_order']) 
           : [],
       frequency: json['frequency'] ?? 'daily',
 
-      // Map ngày tháng
-      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
+      // --- [QUAN TRỌNG 1] SỬA LỖI LỆCH MÚI GIỜ ---
+      // Thêm .toLocal() để chuyển giờ UTC về giờ Việt Nam ngay khi nhận dữ liệu
+      dueDate: json['due_date'] != null 
+          ? DateTime.parse(json['due_date']).toLocal() 
+          : null,
     );
   }
 
@@ -111,7 +107,10 @@ class Chore {
       "rotation_order": rotationOrder,
       "frequency": frequency,
       "assignee_id": assigneeId,
-      // "assignee_name": assigneeName, // Thường server không cần cái này khi gửi lên, nhưng nếu cần thì mở ra
+      
+      // --- [QUAN TRỌNG 2] BỔ SUNG GỬI NGÀY THÁNG ---
+      // Nếu không có dòng này, chỉnh sửa ngày xong sẽ không lưu được
+      "due_date": dueDate?.toIso8601String(), 
     };
   }
 }

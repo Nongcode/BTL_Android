@@ -5,11 +5,9 @@ import '../widgets/leaderboard_card.dart';
 import '../widgets/today_progress_card.dart';
 import '../widgets/monthly_fund_card.dart';
 
-// 1. Chuyển thành StatefulWidget
 class HomeScreen extends StatefulWidget {
   final Function(int) onSwitchTab;
   
-  // Constructor có thể là const vì không chứa GlobalKey trực tiếp nữa
   const HomeScreen({super.key, required this.onSwitchTab});
 
   @override
@@ -17,12 +15,23 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // 2. Khai báo GlobalKey ở trong State để nó được giữ nguyên khi vẽ lại
-  final GlobalKey<TodayProgressCardState> _progressCardKey = GlobalKey();
+  // 1. [THAY ĐỔI]: Dùng biến int thay cho GlobalKey
+  // Mỗi khi biến này thay đổi, TodayProgressCard sẽ tự load lại
+  int _refreshTrigger = 0;
+
+  // Hàm helper để kích hoạt reload (có thể gọi khi cần thiết)
+  void _triggerRefresh() {
+    if (mounted) {
+      setState(() {
+        _refreshTrigger++;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white, // Thêm màu nền cho sạch (tùy chọn)
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -41,11 +50,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const LeaderboardCard(),
 
-            // 3. Gắn Key vào TodayProgressCard
+            // 2. [THAY ĐỔI]: Cập nhật widget TodayProgressCard
             TodayProgressCard(
-              key: _progressCardKey,
+              // Bỏ dòng key: _progressCardKey
+              refreshTrigger: _refreshTrigger, // Truyền trigger vào đây
               onPressed: () {
+                // Chuyển sang tab Danh sách công việc
                 widget.onSwitchTab(1); 
+                
+                // (Mẹo): Khi bấm vào xem chi tiết rồi quay lại, 
+                // ta nên kích hoạt refresh để cập nhật số liệu mới nhất
+                _triggerRefresh();
               },
             ),
 

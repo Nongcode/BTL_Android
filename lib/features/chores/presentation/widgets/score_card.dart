@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Để format tháng
 import '../screens/score_detail_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/service/chore_service.dart';
 
 class ScoreCard extends StatefulWidget {
@@ -27,7 +28,16 @@ class _ScoreCardState extends State<ScoreCard> {
 
   Future<void> _fetchData() async {
     try {
-      final data = await _choreService.getMyScoreStats();
+      // Lấy userId đã lưu khi đăng nhập
+      final prefs = await SharedPreferences.getInstance();
+      int? userId;
+      if (prefs.containsKey('userId')) {
+        final v = prefs.get('userId');
+        if (v is int) userId = v;
+        else if (v is String) userId = int.tryParse(v);
+      }
+
+      final data = await _choreService.getMyScoreStats(userId: userId);
       if (mounted && data != null) {
         setState(() {
           _bonus = data['bonus_points'] ?? 0;

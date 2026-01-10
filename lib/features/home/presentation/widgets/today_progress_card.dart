@@ -1,11 +1,20 @@
-import 'dart:math'; // Để random màu avatar
+import 'dart:math';
 import 'package:flutter/material.dart';
-import '../../../../core/constants/app_colors.dart';
+// import '../../../../core/constants/app_colors.dart'; // Đảm bảo import đúng đường dẫn của bạn
 import '../../../chores/data/service/chore_service.dart';
 
 class TodayProgressCard extends StatefulWidget {
   final VoidCallback? onPressed;
-  const TodayProgressCard({super.key, this.onPressed});
+  
+  // [MỚI] Biến này dùng để báo hiệu cần load lại dữ liệu
+  // Bạn có thể truyền DateTime.now().millisecondsSinceEpoch hoặc một biến đếm tăng dần từ cha
+  final int refreshTrigger; 
+
+  const TodayProgressCard({
+    super.key, 
+    this.onPressed, 
+    this.refreshTrigger = 0 // Mặc định là 0
+  });
 
   @override
   State<TodayProgressCard> createState() => TodayProgressCardState();
@@ -14,23 +23,32 @@ class TodayProgressCard extends StatefulWidget {
 class TodayProgressCardState extends State<TodayProgressCard> {
   final ChoreService _choreService = ChoreService();
   
-  // Biến lưu dữ liệu thống kê
   List<Map<String, dynamic>> _statsList = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    refreshData();
+    _fetchData(); // Gọi hàm tải dữ liệu lần đầu
   }
 
-  Future<void> refreshData() async {
-    // Nếu widget chưa được build xong hoặc đã bị hủy thì dừng
+  // [QUAN TRỌNG] Hàm này chạy khi Widget cha truyền tham số mới vào
+  @override
+  void didUpdateWidget(covariant TodayProgressCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Nếu refreshTrigger thay đổi -> Gọi lại API
+    if (oldWidget.refreshTrigger != widget.refreshTrigger) {
+      _fetchData(isSilent: true); // isSilent = true để không hiện xoay vòng loading gây nháy
+    }
+  }
+
+  // Tách hàm fetch data và thêm chế độ tải ngầm (silent)
+  Future<void> _fetchData({bool isSilent = false}) async {
     if (!mounted) return;
 
-    // Chỉ hiện loading nếu danh sách đang trống (để tránh nháy màn hình khi update ngầm)
-    if (_statsList.isEmpty) {
-        setState(() => _isLoading = true);
+    // Chỉ hiện loading xoay vòng nếu không phải tải ngầm và chưa có dữ liệu
+    if (!isSilent && _statsList.isEmpty) {
+       setState(() => _isLoading = true);
     }
 
     try {
@@ -42,7 +60,7 @@ class TodayProgressCardState extends State<TodayProgressCard> {
         });
       }
     } catch (e) {
-      print("Lỗi tải thống kê: $e");
+      debugPrint("Lỗi tải thống kê: $e");
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -66,25 +84,34 @@ class TodayProgressCardState extends State<TodayProgressCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Tiêu đề
           const Text(
             "Tiến độ hoàn thành công việc hôm nay",
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
           const SizedBox(height: 20),
 
-          // 2. Danh sách thành viên (Dynamic)
+          // Logic hiển thị Loading / Empty / List
           if (_isLoading)
-            const Center(child: CircularProgressIndicator())
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(color: Color(0xFF40C4C6)),
+              ),
+            )
           else if (_statsList.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: Text("Hôm nay chưa có công việc nào!", style: TextStyle(color: Colors.grey))),
+              child: Center(
+                child: Text(
+                  "Hôm nay chưa có công việc nào!", 
+                  style: TextStyle(color: Colors.grey)
+                )
+              ),
             )
           else
             ListView.separated(
-              shrinkWrap: true, // Quan trọng để nằm trong Column
-              physics: const NeverScrollableScrollPhysics(), // Không cuộn riêng
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: _statsList.length,
               separatorBuilder: (context, index) => const Divider(height: 25, color: Colors.black12),
               itemBuilder: (context, index) {
@@ -92,8 +119,6 @@ class TodayProgressCardState extends State<TodayProgressCard> {
                 final name = item['assignee_name'] ?? 'Ẩn danh';
                 final total = item['total_chores'] ?? 0;
                 final completed = item['completed_chores'] ?? 0;
-
-                // Tạo màu ngẫu nhiên hoặc cố định dựa trên tên
                 final colors = _getAvatarColors(index);
 
                 return _buildProgressItem(
@@ -105,14 +130,16 @@ class TodayProgressCardState extends State<TodayProgressCard> {
                 );
               },
             ),
-          // 3. Nút bấm
+
+          const SizedBox(height: 20), // Thêm khoảng cách trước nút bấm
+          
           SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
               onPressed: widget.onPressed,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF40C4C6), // AppColors.primary
+                backgroundColor: const Color(0xFF40C4C6),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
@@ -151,10 +178,11 @@ class TodayProgressCardState extends State<TodayProgressCard> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Text("Đã hoàn thành", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            const Text("Đã hoàn thành", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+            const SizedBox(height: 4),
             Text(
               progressText,
-              style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+              style: const TextStyle(color: Color(0xFF40C4C6), fontWeight: FontWeight.bold, fontSize: 14), // Sửa màu đỏ thành màu chủ đạo hoặc giữ nguyên tùy bạn
             ),
           ],
         ),
@@ -162,14 +190,13 @@ class TodayProgressCardState extends State<TodayProgressCard> {
     );
   }
 
-  // Hàm phụ trợ để lấy màu sắc đẹp cho avatar
   Map<String, Color> _getAvatarColors(int index) {
     final List<Map<String, Color>> palette = [
-      {'bg': Colors.pink.shade100, 'text': Colors.pink},
-      {'bg': Colors.lightGreen.shade100, 'text': Colors.green},
-      {'bg': Colors.cyan.shade100, 'text': Colors.cyan.shade800},
-      {'bg': Colors.orange.shade100, 'text': Colors.deepOrange},
-      {'bg': Colors.purple.shade100, 'text': Colors.purple},
+      {'bg': Colors.pink.shade50, 'text': Colors.pink},
+      {'bg': Colors.lightGreen.shade50, 'text': Colors.green},
+      {'bg': Colors.cyan.shade50, 'text': Colors.cyan.shade800},
+      {'bg': Colors.orange.shade50, 'text': Colors.deepOrange},
+      {'bg': Colors.purple.shade50, 'text': Colors.purple},
     ];
     return palette[index % palette.length];
   }

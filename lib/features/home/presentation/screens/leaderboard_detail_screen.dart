@@ -201,9 +201,9 @@ class _LeaderboardDetailScreenState extends State<LeaderboardDetailScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) => ScoreDetailScreen(
-                  userName: member.name, 
+                  targetUserName: member.name,
                   // QUAN TRỌNG: Phải truyền tháng đang chọn ở màn hình Leaderboard
-                  initialMonth: _selectedDate.month, 
+                  initialMonth: _selectedDate.month,
                   initialYear: _selectedDate.year,
                 ),
               ),
