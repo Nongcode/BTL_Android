@@ -1,11 +1,12 @@
-// lib/features/bulletin/widgets/shopping_card.dart
+// lib/features/bulletin/presentation/widgets/shopping_card.dart
 import 'package:flutter/material.dart';
-import 'package:btl_android_flutter/features/bulletin/presentation/screens/shopping_list_screen.dart';
 
 class ShoppingCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
+
+  /// Màn cha truyền vào để đi tới ShoppingListScreen(houseId: ...)
   final VoidCallback? onTap;
 
   const ShoppingCard({
@@ -20,14 +21,7 @@ class ShoppingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: onTap ??
-          () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ShoppingListScreen(),
-              ),
-            );
-          },
+      onTap: onTap, // ✅ không tự push screen trong widget
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

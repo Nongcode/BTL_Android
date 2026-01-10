@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+// Hãy đảm bảo đường dẫn import dưới đây đúng với project của bạn
 import '../../data/models/chore_model.dart';
 import '../../data/service/chore_service.dart';
 
@@ -16,6 +17,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
 
   final ChoreService _choreService = ChoreService();
   bool _isLoading = false;
+  
   // Controller
   late TextEditingController _titleController;
   late TextEditingController _assigneeController;
@@ -26,24 +28,32 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Gán dữ liệu
     _titleController = TextEditingController(text: widget.chore.title);
     _assigneeController = TextEditingController(text: widget.chore.assigneeName);
     _pointsController = TextEditingController(text: widget.chore.points.toString());
-    
-    // Ghi chú (Nếu Backend trả về null thì để chuỗi rỗng)
     _noteController = TextEditingController(text: widget.chore.description ?? "");
 
+    // SỬA: Thêm .toLocal() để chuyển UTC -> Giờ địa phương
     String formattedDate = widget.chore.dueDate != null
-        ? DateFormat('dd/MM/yyyy').format(widget.chore.dueDate!)
+        ? DateFormat('dd/MM/yyyy').format(widget.chore.dueDate!.toLocal())
         : "Không có hạn";
     _dateController = TextEditingController(text: formattedDate);
   }
 
   Future<void> _handleUpdate() async {
-    setState(() => _isLoading = true); // Bật loading
+    setState(() => _isLoading = true);
 
-    // Tạo object mới từ dữ liệu nhập
+    // SỬA: Parse lại ngày từ chuỗi hiển thị
+    DateTime? newDueDate;
+    try {
+      if (_dateController.text.isNotEmpty && _dateController.text != "Không có hạn") {
+        newDueDate = DateFormat('dd/MM/yyyy').parse(_dateController.text);
+      }
+    } catch (e) {
+      // Fallback nếu lỗi parse: dùng ngày cũ
+      newDueDate = widget.chore.dueDate;
+    }
+
     final updatedChore = Chore(
       id: widget.chore.id,
       title: _titleController.text,
@@ -51,27 +61,28 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
       points: int.tryParse(_pointsController.text) ?? 0,
       description: _noteController.text,
       
-      // Giữ nguyên các trường cũ
+      // SỬA: Sử dụng ngày mới đã parse
+      dueDate: newDueDate,
+      
       assigneeId: widget.chore.assigneeId, 
       templateId: widget.chore.templateId,
       isDone: widget.chore.isDone,
       iconAsset: widget.chore.iconAsset,
       iconType: widget.chore.iconType,
-      dueDate: widget.chore.dueDate,
       isRotating: widget.chore.isRotating,
       frequency: widget.chore.frequency,
       rotationOrder: widget.chore.rotationOrder,
     );
 
     final templateIdToUpdate = widget.chore.templateId;
+    
     // Gọi API
     final success = await _choreService.updateTemplate(templateIdToUpdate.toString(), updatedChore);
 
-    setState(() => _isLoading = false); // Tắt loading
+    setState(() => _isLoading = false);
 
     if (success) {
       if (mounted) {
-        // Trả về true để màn hình danh sách biết mà reload
         Navigator.pop(context, true); 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cập nhật thành công!'), backgroundColor: Colors.green),
@@ -86,18 +97,13 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     }
   }
 
-  // --- HÀM XỬ LÝ DELETE ---
   Future<void> _handleDelete() async {
-  // 1. Đóng cái Dialog xác nhận trước
-    Navigator.pop(context); 
+    Navigator.pop(context); // Đóng dialog
 
     setState(() => _isLoading = true);
 
-    // --- SỬA Ở ĐÂY: Lấy đúng Template ID ---
-    // Giống như lúc Update, ta phải lấy templateId
     final templateIdToDelete = widget.chore.templateId;
 
-    // Kiểm tra null cho chắc chắn
     if (templateIdToDelete == null) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,14 +112,12 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
         return;
     }
 
-    // Gọi API (nhớ ép kiểu .toString() nếu Service yêu cầu String giống hàm update)
-    final success = await _choreService.deleteTemplate(templateIdToDelete.toString()); // Hoặc templateIdToDelete nếu service nhận int
+    final success = await _choreService.deleteTemplate(templateIdToDelete.toString());
 
     setState(() => _isLoading = false);
 
     if (success) {
       if (mounted) {
-        // Trả về true để màn hình danh sách biết mà reload
         Navigator.pop(context, true); 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Đã xóa công việc!'), backgroundColor: Colors.green),
@@ -138,6 +142,22 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     super.dispose();
   }
 
+  // Hàm chọn ngày (DatePicker)
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: widget.chore.dueDate?.toLocal() ?? DateTime.now(),
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2030),
+      // locale: const Locale('vi', 'VN'), // Bỏ comment nếu đã config localization
+    );
+    if (picked != null) {
+      setState(() {
+        _dateController.text = DateFormat('dd/MM/yyyy').format(picked);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusColor = widget.chore.isDone ? Colors.green : Colors.orange;
@@ -147,15 +167,14 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     const primaryColor = Color(0xFF40C4C6);
     const backgroundColor = Color(0xFFF5F5F5);
 
-    // Logic xác định loại công việc để hiển thị
     String jobType = widget.chore.isRotating 
         ? "Việc chung (Xoay vòng)" 
         : "Việc cá nhân (Cố định)";
     
-    // Icon tương ứng cho sinh động
     IconData jobTypeIcon = widget.chore.isRotating 
         ? Icons.sync 
         : Icons.person_pin;    
+    
     if (_isLoading) {
         return const Scaffold(
             backgroundColor: Colors.white,
@@ -185,7 +204,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // --- Ảnh minh họa ---
+                    // Ảnh minh họa
                     Container(
                       height: 100,
                       width: 100,
@@ -198,7 +217,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // --- Tên công việc ---
+                    // Tên công việc
                     TextField(
                       controller: _titleController,
                       textAlign: TextAlign.center,
@@ -208,7 +227,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
 
                     const SizedBox(height: 10),
 
-                    // --- Trạng thái ---
+                    // Trạng thái
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
@@ -226,7 +245,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                     ),
                     const SizedBox(height: 30),
 
-                    // --- Form chi tiết ---
+                    // Form chi tiết
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -238,17 +257,21 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
                           _buildEditableRow(Icons.person, "Người thực hiện", _assigneeController),
                           const Divider(height: 30),
 
-                          // Dùng ReadOnly vì loại việc thường do hệ thống định nghĩa, không sửa tay ở đây
                           _buildReadOnlyRow(jobTypeIcon, "Loại công việc", jobType, textColor: Colors.blue[700]),
                           const Divider(height: 30),
 
                           _buildEditableRow(Icons.stars_rounded, "Điểm thưởng", _pointsController, isNumber: true, valueColor: Colors.red),
                           const Divider(height: 30),
                           
-                          _buildEditableRow(Icons.calendar_today, "Hạn hoàn thành", _dateController),
+                          // SỬA: Thêm GestureDetector để chọn ngày
+                          GestureDetector(
+                            onTap: () => _selectDate(context),
+                            child: AbsorbPointer( // Chặn bàn phím hiện lên
+                                child: _buildEditableRow(Icons.calendar_today, "Hạn hoàn thành", _dateController),
+                            ),
+                          ),
                           const Divider(height: 30),
                           
-                          // Ghi chú (Description)
                           _buildEditableRow(Icons.notes, "Ghi chú", _noteController),
                         ],
                       ),
@@ -258,7 +281,7 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
               ),
             ),
 
-            // --- Nút bấm ---
+            // Nút bấm
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -315,7 +338,6 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     );
   }
 
-  // Widget nhập liệu (Có thể sửa)
   Widget _buildEditableRow(IconData icon, String label, TextEditingController controller, {bool isNumber = false, Color valueColor = Colors.black87}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -339,7 +361,6 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
     );
   }
 
-  // [MỚI] Widget hiển thị thông tin tĩnh (Không cho sửa)
   Widget _buildReadOnlyRow(IconData icon, String label, String value, {Color? textColor}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -355,12 +376,10 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor ?? Colors.black87),
           ),
         ),
-        // Không có icon Edit vì đây là ReadOnly
       ],
     );
   }
 
-  // Tìm đến hàm _showDeleteConfirmDialog ở cuối file
   void _showDeleteConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -369,13 +388,8 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
         content: Text("Bạn có chắc chắn muốn xóa công việc '${widget.chore.title}' không?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
-          
-          // --- SỬA Ở ĐÂY ---
           TextButton(
-            onPressed: () {
-              // Thay vì pop context lung tung, hãy gọi thẳng hàm xử lý logic
-              _handleDelete(); 
-            },
+            onPressed: _handleDelete,
             child: const Text("Xóa", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],

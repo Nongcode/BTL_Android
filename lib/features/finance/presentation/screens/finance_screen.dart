@@ -4,9 +4,10 @@ import '../../data/models/finance_model.dart';
 import '../../data/service/finance_service.dart';
 import '../widgets/finance_stat_card.dart';
 import 'fund_detail_screen.dart';
-import 'debt_summary_screen.dart';
 import 'add_expense_screen.dart';
 import 'confirm_payment_screen.dart';
+import 'payment_history_screen.dart';
+import 'fund_history_screen.dart';
 
 class FinanceScreen extends StatefulWidget {
   const FinanceScreen({super.key});
@@ -24,8 +25,13 @@ class _FinanceScreenState extends State<FinanceScreen> {
   FundSummary? _summary;
   List<CommonExpense> _commonExpenses = [];
   List<AdHocExpense> _adHocExpenses = [];
+  int? _deletingAdHocId;
+  List<DebtItem> _debts = [];
+  int? _selectedDebtMemberId;
+  bool _loadingDebts = false;
   bool _loading = false;
   String? _error;
+  String? _debtError;
 
   final NumberFormat _currency = NumberFormat.currency(
     locale: 'vi_VN',
@@ -59,7 +65,11 @@ class _FinanceScreenState extends State<FinanceScreen> {
               "${_currency.format(summary.contributionAmount)} /người";
           FinanceScreen.contributionAmount = _contributionAmount;
         }
+        _initDebtMember(summary);
       });
+      if (_selectedDebtMemberId != null) {
+        await _loadDebtsForMember(_selectedDebtMemberId!);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -69,6 +79,35 @@ class _FinanceScreenState extends State<FinanceScreen> {
       if (mounted) {
         setState(() => _loading = false);
       }
+    }
+  }
+
+  void _initDebtMember(FundSummary? summary) {
+    if (_selectedDebtMemberId != null) return;
+    final members = summary?.memberStatus ?? [];
+    if (members.isNotEmpty) {
+      _selectedDebtMemberId = members.first.memberId;
+    }
+  }
+
+  Future<void> _loadDebtsForMember(int memberId) async {
+    setState(() {
+      _loadingDebts = true;
+      _debtError = null;
+    });
+    try {
+      final list = await _service.fetchDebts(memberId: memberId);
+      if (!mounted) return;
+      setState(() {
+        _debts = list;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _debtError = 'Không tải được danh sách nợ';
+      });
+    } finally {
+      if (mounted) setState(() => _loadingDebts = false);
     }
   }
 
@@ -90,6 +129,118 @@ class _FinanceScreenState extends State<FinanceScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Đã thêm chi tiêu phát sinh')),
       );
+    }
+  }
+
+  Future<void> _handleEditAdHoc(AdHocExpense expense) async {
+    final summary = _summary;
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddExpenseScreen(
+          initialType: 1,
+          summary: summary,
+          houseId: _service.houseId,
+          adHocExpense: expense,
+          viewOnly: true,
+        ),
+      ),
+    );
+    if (result == true) {
+      await _loadFinance();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã cập nhật chi tiêu phát sinh')),
+      );
+    }
+  }
+
+  Future<void> _openDebtExpense(DebtItem debt) async {
+    AdHocExpense? target;
+    AdHocExpense? findById() {
+      if (debt.expenseId <= 0) return null;
+      for (final e in _adHocExpenses) {
+        if (e.id == debt.expenseId) return e;
+      }
+      return null;
+    }
+
+    target = findById();
+
+    // Nếu chưa thấy, tải lại danh sách chi tiêu phát sinh rồi thử lại
+    if (target == null) {
+      final refreshed = await _service.fetchAdHocExpenses();
+      if (mounted) setState(() => _adHocExpenses = refreshed);
+      target = findById();
+    }
+
+    // Nếu backend chưa trả expenseId hoặc dữ liệu chưa đồng bộ
+    if (target == null) {
+      final msg = debt.expenseId > 0
+          ? 'Không tìm thấy chi tiêu gốc (ID ${debt.expenseId}). Thử tải lại.'
+          : 'Khoản nợ này chưa gắn với chi tiêu phát sinh.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      return;
+    }
+
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddExpenseScreen(
+          initialType: 1,
+          summary: _summary,
+          houseId: _service.houseId,
+          adHocExpense: target,
+          viewOnly: true,
+        ),
+      ),
+    );
+
+    if (changed == true && _selectedDebtMemberId != null) {
+      await _loadFinance();
+      await _loadDebtsForMember(_selectedDebtMemberId!);
+    }
+  }
+
+  Future<void> _handleDeleteAdHoc(AdHocExpense expense) async {
+    if (_deletingAdHocId != null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa chi tiêu phát sinh?'),
+        content: Text('Bạn chắc chắn muốn xóa "${expense.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _deletingAdHocId = expense.id);
+    final ok = await _service.deleteAdHocExpense(expenseId: expense.id);
+
+    if (!mounted) return;
+    setState(() => _deletingAdHocId = null);
+
+    if (ok) {
+      await _loadFinance();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã xóa chi tiêu phát sinh')),
+      );
+    } else {
+      final msg =
+          FinanceService.lastDeleteAdHocError ?? 'Xóa thất bại, thử lại';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -440,7 +591,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
 
                         // Số dự hiện tại
                         _buildQuotaRow(
-                          "Số dự hiện tại:",
+                          "Số dư hiện tại:",
                           summary != null ? _fmt(summary.currentBalance) : "…",
                           color: const Color(0xFF5DBDD4),
                         ),
@@ -475,8 +626,8 @@ class _FinanceScreenState extends State<FinanceScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
+                            onPressed: () async {
+                              final changed = await Navigator.push<bool>(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => FundDetailScreen(
@@ -486,6 +637,9 @@ class _FinanceScreenState extends State<FinanceScreen> {
                                   ),
                                 ),
                               );
+                              if (changed == true) {
+                                await _loadFinance();
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF5DBDD4),
@@ -643,53 +797,66 @@ class _FinanceScreenState extends State<FinanceScreen> {
                             ..._adHocExpenses.map(
                               (e) => Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
-                                child: _buildExpenseItemWithIcon(
-                                  icon: "💸",
-                                  title: e.title,
-                                  description: e.description ?? '',
-                                  date:
-                                      "${e.expenseDate.day}/${e.expenseDate.month}/${e.expenseDate.year}",
-                                  amount: _fmt(e.totalAmount),
-                                  badge: e.paidByName.isNotEmpty
-                                      ? "${e.paidByName} đã trả"
-                                      : "Đã chi",
-                                  badgeColor: const Color(0xFF5DBDD4),
-                                  trailing: null,
+                                child: GestureDetector(
+                                  onTap: () => _handleEditAdHoc(e),
+                                  child: _buildExpenseItemWithIcon(
+                                    icon: "",
+                                    title: e.title,
+                                    description: e.description ?? '',
+                                    date:
+                                        "${e.expenseDate.day}/${e.expenseDate.month}/${e.expenseDate.year}",
+                                    amount: _fmt(e.totalAmount),
+                                    badge: e.paidByName.isNotEmpty
+                                        ? "${e.paidByName} đã trả"
+                                        : "Đã chi",
+                                    badgeColor: const Color(0xFF5DBDD4),
+                                    trailing: (_deletingAdHocId == e.id)
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.redAccent,
+                                              size: 18,
+                                            ),
+                                            onPressed: () =>
+                                                _handleDeleteAdHoc(e),
+                                          ),
+                                  ),
                                 ),
                               ),
                             ),
                         ] else if (_expenseTabIndex == 1) ...[
-                          _buildDebtItem(
-                            name: "Tuấn đang nợ Long",
-                            amount: "100.000 đ",
-                          ),
+                          _buildDebtHeader(),
                           const SizedBox(height: 12),
-                          _buildDebtItem(
-                            name: "Long đang nợ Tuấn",
-                            amount: "200.000 đ",
-                          ),
-                          const SizedBox(height: 20),
-                          Center(
-                            child: GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const DebtSummaryScreen(),
-                                  ),
-                                );
-                              },
-
-                              child: const Text(
-                                "Xem chi tiết ai nợ ai",
-                                style: TextStyle(
-                                  color: Color(0xFF5DBDD4),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                          if (_loadingDebts)
+                            const Center(child: CircularProgressIndicator())
+                          else if (_debtError != null)
+                            Text(
+                              _debtError!,
+                              style: const TextStyle(color: Colors.red),
+                            )
+                          else if (_debts.isEmpty)
+                            const Text(
+                              "Chưa có khoản nợ",
+                              style: TextStyle(color: Colors.grey),
+                            )
+                          else
+                            ..._debts.map(
+                              (d) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: GestureDetector(
+                                  onTap: () => _openDebtExpense(d),
+                                  child: _buildDebtCard(d),
                                 ),
                               ),
                             ),
-                          ),
+                          const SizedBox(height: 16),
                         ],
                       ],
                     ),
@@ -820,105 +987,6 @@ class _FinanceScreenState extends State<FinanceScreen> {
     );
   }
 
-  Widget _buildDebtItem({required String name, required String amount}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200, width: 1),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFF5DBDD4).withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.arrow_forward,
-                size: 16,
-                color: Color(0xFF5DBDD4),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF5DBDD4),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              amount,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () {
-              // Parse name: "Tuấn đang nợ Long" -> from: "Tuấn", to: "Long"
-              final parts = name.split(" đang nợ ");
-              final from = parts[0];
-              final to = parts[1];
-              // Parse amount: "100.000 đ" -> 100000
-              final intAmount = int.parse(
-                amount.replaceAll(RegExp(r'[^0-9]'), ""),
-              );
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ConfirmPaymentScreen(
-                    from: from,
-                    to: to,
-                    amount: intAmount,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF5DBDD4),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                "Xác nhận thành toán",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildQuotaRow(
     String label,
     String value, {
@@ -930,7 +998,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
         Text(
           label,
           style: const TextStyle(
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
             fontSize: 14,
             color: Colors.black87,
           ),
@@ -938,7 +1006,7 @@ class _FinanceScreenState extends State<FinanceScreen> {
         Text(
           value,
           style: TextStyle(
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
             fontSize: 14,
             color: color,
           ),
@@ -951,39 +1019,190 @@ class _FinanceScreenState extends State<FinanceScreen> {
     required String title,
     required String amount,
   }) {
-    return GestureDetector(
-      onTap: () {},
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0FEFF),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFD0EFF5), width: 1),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Colors.black87,
                   ),
-                  Text(
-                    amount,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  amount,
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDebtHeader() {
+    final members = _summary?.memberStatus ?? [];
+    return Row(
+      children: [
+        const Text(
+          "Chọn người nợ:",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: DropdownButton<int>(
+              value: _selectedDebtMemberId,
+              underline: const SizedBox(),
+              isExpanded: true,
+              hint: Text(members.isEmpty ? 'Đang tải...' : 'Chọn thành viên'),
+              items: members
+                  .map(
+                    (m) => DropdownMenuItem<int>(
+                      value: m.memberId,
+                      child: Text(
+                        m.memberName.isNotEmpty
+                            ? m.memberName
+                            : 'Thành viên ${m.memberId}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) async {
+                if (value == null) return;
+                setState(() => _selectedDebtMemberId = value);
+                await _loadDebtsForMember(value);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDebtCard(DebtItem debt) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            debt.fromExpense.isNotEmpty ? debt.fromExpense : 'Khoản nợ',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Chủ nợ: ${debt.creditorName}',
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              () {
+                final remaining = debt.remainingAmount < 0
+                    ? 0
+                    : debt.remainingAmount;
+                final paidOff = remaining <= 0;
+                return Text(
+                  paidOff ? 'Đã thanh toán nợ' : 'Còn lại: ${_fmt(remaining)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: paidOff ? Colors.green : Colors.redAccent,
+                    fontSize: 14,
+                  ),
+                );
+              }(),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () async {
+                      final result = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ConfirmPaymentScreen(
+                            from:
+                                _summary?.memberStatus
+                                    .firstWhere(
+                                      (m) =>
+                                          m.memberId == _selectedDebtMemberId,
+                                      orElse: () => MemberStatus(
+                                        memberId: 0,
+                                        memberName: '',
+                                        status: '',
+                                        amount: 0,
+                                        contributedAt: null,
+                                        note: null,
+                                      ),
+                                    )
+                                    .memberName ??
+                                '',
+                            to: debt.creditorName,
+                            amount: debt.remainingAmount,
+                            debtId: debt.debtId,
+                            houseId: _service.houseId,
+                          ),
+                        ),
+                      );
+                      if (result == true && _selectedDebtMemberId != null) {
+                        await _loadFinance();
+                      }
+                    },
+                    child: const Text('Thanh toán'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final changed = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PaymentHistoryScreen(
+                            debtId: debt.debtId,
+                            title: debt.fromExpense,
+                            houseId: _service.houseId,
+                          ),
+                        ),
+                      );
+                      if (changed == true && _selectedDebtMemberId != null) {
+                        await _loadFinance();
+                      }
+                    },
+                    child: const Text('Lịch sử'),
                   ),
                 ],
               ),
-            ),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

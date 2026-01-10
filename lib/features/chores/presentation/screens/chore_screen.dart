@@ -80,12 +80,12 @@ class _ChoreScreenState extends State<ChoreScreen> {
                       text: "'${chore.title}'",
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
                     ),
-                    const TextSpan(text: " giúp "),
-                    TextSpan(
-                      // Lưu ý: Dùng assigneeName khớp với Model mới
-                      text: "${chore.assigneeName} ?",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                    // const TextSpan(text: " giúp "),
+                    // TextSpan(
+                    //   // Lưu ý: Dùng assigneeName khớp với Model mới
+                    //   text: "${chore.assigneeName} ?",
+                    //   style: const TextStyle(fontWeight: FontWeight.bold),
+                    // ),
                   ],
                 ),
               ),
@@ -192,8 +192,12 @@ class _ChoreScreenState extends State<ChoreScreen> {
       backgroundColor: const Color(0xFFF5F5F5),
 
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 80.0), // Padding này để tránh bị che bởi BottomBar (nếu có)
+        padding: const EdgeInsets.only(bottom: 80.0),
         child: FloatingActionButton(
+          backgroundColor: const Color(0xFF40C4C6),
+          elevation: 4,
+          shape: const CircleBorder(),
+          child: const Icon(Icons.add, color: Colors.white, size: 40),
           onPressed: () async {
             // 1. Chờ kết quả từ màn hình thêm mới
             final newChore = await Navigator.push(
@@ -201,35 +205,60 @@ class _ChoreScreenState extends State<ChoreScreen> {
               MaterialPageRoute(builder: (context) => const AddChoreScreen()),
             );
 
-            // 2. Kiểm tra kết quả trả về
-            if (newChore != null) {
-              // --- BƯỚC QUAN TRỌNG: GỌI API LƯU XUỐNG DB ---
-              // (Hiển thị loading nhẹ hoặc thông báo nếu cần)
-              try {
-                  // Giả sử bạn đã inject ChoreService vào biến _choreService
-                  // Hàm này sẽ gửi newChore.toJson() lên server
-                  await _choreService.createTemplate(newChore); 
+            // 2. Kiểm tra dữ liệu trả về (cần check kiểu dữ liệu là Chore)
+            if (newChore != null && newChore is Chore) {
+              
+              // Bật loading để người dùng biết app đang chạy
+              setState(() => _isLoading = true);
 
-                  // 3. Sau khi lưu thành công thì mới load lại danh sách
-                  _fetchTodayChores();
-                  
-                  // (Tùy chọn) Hiện thông báo thành công
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Thêm công việc thành công!"), backgroundColor: Colors.green),
-                  );
+              try {
+                // --- GỌI API ---
+                // Giả sử service trả về true/false
+                final success = await _choreService.createTemplate(newChore);
+
+                if (success) {
+                  // --- CẬP NHẬT GIAO DIỆN NGAY LẬP TỨC (QUAN TRỌNG) ---
+                  // Ta tự thêm việc vào danh sách hiển thị để người dùng thấy ngay
+                  // mà không cần chờ _fetchTodayChores tải xong (giúp app mượt hơn)
+                  setState(() {
+                    allChores.add(newChore); // Thêm "giả" vào list hiện tại
+                    _isLoading = false;      // Tắt loading ngay
+                  });
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Đã thêm: ${newChore.title}"),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+
+                  // Sau đó gọi ngầm để đồng bộ lại dữ liệu chuẩn từ Server
+                  // (Để lấy đúng ID và trạng thái từ DB)
+                  await _fetchTodayChores();
+
+                } else {
+                  // Trường hợp thất bại
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Lỗi Server: Không thể tạo việc"), backgroundColor: Colors.red),
+                    );
+                  }
+                }
               } catch (e) {
-                  print("Lỗi tạo việc: $e");
+                print("Lỗi tạo việc: $e");
+                if (mounted) {
+                  setState(() => _isLoading = false);
                   ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
+                    SnackBar(content: Text("Lỗi: $e"), backgroundColor: Colors.red),
                   );
+                }
               }
             }
           },
-
-          backgroundColor: const Color(0xFF40C4C6),
-          elevation: 4,
-          shape: const CircleBorder(),
-          child: const Icon(Icons.add, color: Colors.white, size: 40),
         ),
       ),
 
